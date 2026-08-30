@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Xcode build artifacts
+build/
+build_device/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# Python (floorplan tools)
+floorplan/.venv/
+__pycache__/
+*.pyc

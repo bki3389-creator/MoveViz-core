@@ -1,0 +1,122 @@
+[
+  {
+    "label": "sp0.25_ar1.5_nf0.1",
+    "params": {
+      "split_min_dist": 0.25,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.1,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.25_ar1.5_nf0.15",
+    "params": {
+      "split_min_dist": 0.25,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.15,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.25_ar2.2_nf0.1",
+    "params": {
+      "split_min_dist": 0.25,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.1,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.25_ar2.2_nf0.15",
+    "params": {
+      "split_min_dist": 0.25,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.15,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.32_ar1.5_nf0.1",
+    "params": {
+      "split_min_dist": 0.32,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.1,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.32_ar1.5_nf0.15",
+    "params": {
+      "split_min_dist": 0.32,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.15,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.32_ar2.2_nf0.1",
+    "params": {
+      "split_min_dist": 0.32,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.1,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.32_ar2.2_nf0.15",
+    "params": {
+      "split_min_dist": 0.32,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.15,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.4_ar1.5_nf0.1",
+    "params": {
+      "split_min_dist": 0.4,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.1,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.4_ar1.5_nf0.15",
+    "params": {
+      "split_min_dist": 0.4,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.15,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.4_ar2.2_nf0.1",
+    "params": {
+      "split_min_dist": 0.4,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.1,
+      "nf_max_aspect": 5.0
+    }
+  },
+  {
+    "label": "sp0.4_ar2.2_nf0.15",
+    "params": {
+      "split_min_dist": 0.4,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.15,
+      "nf_max_aspect": 5.0
+    }
+  }
+]

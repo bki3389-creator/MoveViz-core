@@ -1,0 +1,59 @@
+# Secrets and local configuration
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.keystore
+*.jks
+
+# Dependencies, builds, and caches
+**/.venv/
+**/.venv*/
+**/venv/
+**/node_modules/
+**/.next/
+**/dist/
+**/build/
+**/DerivedData/
+**/xcuserdata/
+**/__pycache__/
+**/.pytest_cache/
+*.py[cod]
+*.tsbuildinfo
+.DS_Store
+
+# Runtime and temporary files
+data/
+scans/
+**/uploads/
+**/keyframes/
+*.log
+*.tmp
+*.bak
+*.bak_*
+*~
+*.db
+*.sqlite
+*.sqlite3
+
+# Private or generated spatial/media assets
+*.glb
+*.glbbak
+*.gltf
+*.usdz
+*.obj
+*.ply
+*.3dm
+*.3dmbak
+*.ifc
+*.zip
+*.mp4
+*.mov
+
+# Keep the synthetic iOS floor-plan fixture.
+!apps/ios/floorplan/test_room.ply

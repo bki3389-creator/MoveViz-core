@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>movemate — 내 방 카드</title>
+<meta property="og:title" content="내 방 3D 카드 — movemate" />
+<meta property="og:description" content="사진 한 장으로 내 방을 3D로. 이사 견적은 덤." />
+<style>
+  :root{
+    --bg:#0e1014; --panel:#161922; --panel2:#1d2230; --line:#272d3a;
+    --ink:#eef1f7; --sub:#9aa3b2; --mut:#6b7484;
+    --brand:#7c8bff; --brand2:#a78bfa; --good:#5fd39a; --warn:#ffd166; --pink:#ff9ec7;
+    --radius:18px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  .wrap{max-width:760px; margin:0 auto; padding:0 18px 80px}
+  .nav{display:flex; align-items:center; gap:10px; padding:18px 0 8px}
+  .logo{display:flex; align-items:center; gap:9px; font-weight:800; letter-spacing:-.02em; font-size:19px}
+  .logo .dot{width:22px;height:22px;border-radius:7px;
+    background:linear-gradient(135deg,var(--brand),var(--brand2)); display:grid; place-items:center; font-size:13px}
+  .nav .tag{margin-left:auto; font-size:12px; color:var(--mut); border:1px solid var(--line); padding:4px 9px; border-radius:999px}
+
+  /* hero */
+  .hero{padding:34px 0 8px; text-align:center}
+  .hero h1{font-size:34px; line-height:1.2; letter-spacing:-.03em; margin:0 0 12px; font-weight:850}
+  .hero h1 .hl{background:linear-gradient(120deg,var(--brand),var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .hero p{color:var(--sub); font-size:15.5px; line-height:1.6; margin:0 auto; max-width:440px}
+  .cta{display:inline-flex; align-items:center; gap:8px; cursor:pointer; border:0; border-radius:14px;
+    padding:15px 22px; font-size:16px; font-weight:750; color:#0b0d12;
+    background:linear-gradient(120deg,var(--brand),var(--brand2)); box-shadow:0 10px 30px -10px var(--brand); transition:.15s}
+  .cta:hover{transform:translateY(-1px)}
+  .cta.sec{background:var(--panel2); color:var(--ink); border:1px solid var(--line); box-shadow:none}
+  .cta.lg{padding:17px 26px; font-size:17px}
+  .cta:disabled{opacity:.5; cursor:not-allowed}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px}
+  .mt{margin-top:18px}
+
+  /* stage scroller */
+  .stage{display:none}
+  .stage.on{display:block; animation:fade .4s ease}
+  @keyframes fade{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+
+  /* 3D */
+  #viewer{width:100%; aspect-ratio:1/1; max-height:62vh; border-radius:16px; overflow:hidden;
+    background:radial-gradient(120% 90% at 50% 0%,#222a3d 0%,#12151d 70%); position:relative; touch-action:none}
+  #viewer canvas{display:block}
+  .scan-overlay{position:absolute; inset:0; display:grid; place-items:center; text-align:center; gap:10px;
+    background:rgba(10,12,18,.55); backdrop-filter:blur(2px); z-index:3}
+  .scan-overlay .bar{width:200px;height:6px;border-radius:99px;background:#2a3142;overflow:hidden;margin-top:6px}
+  .scan-overlay .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--pink))}
+  .hint{position:absolute; left:0; right:0; bottom:10px; text-align:center; font-size:12px; color:var(--sub); z-index:2; pointer-events:none}
+
+  /* stat row */
+  .stats{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:14px}
+  .stat{background:var(--panel2); border:1px solid var(--line); border-radius:14px; padding:14px 12px; text-align:center}
+  .stat b{display:block; font-size:22px; font-weight:820; letter-spacing:-.02em}
+  .stat span{font-size:12px; color:var(--sub)}
+
+  .est{display:flex; align-items:center; gap:16px; margin-top:6px}
+  .est .truck{font-size:42px}
+  .est .big{font-size:27px; font-weight:850; letter-spacing:-.02em}
+  .est .sub{color:var(--sub); font-size:13px; margin-top:2px}
+  .callout{margin-top:12px; background:rgba(124,139,255,.10); border:1px solid rgba(124,139,255,.28);
+    border-radius:12px; padding:11px 13px; font-size:13px; color:#cdd4ff; line-height:1.55}
+  .rooms{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px}
+  .chip{display:inline-flex; align-items:center; gap:6px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:999px; padding:7px 12px; font-size:13px; font-weight:600}
+  .chip.fixed{border-color:rgba(124,139,255,.5); color:#fff}
+  .chip .x{cursor:pointer; color:var(--mut); font-weight:800; margin-left:1px}
+  .chip .x:hover{color:var(--pink)}
+  .addrooms{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+  .addbtn{cursor:pointer; background:transparent; border:1px dashed var(--line); color:var(--sub);
+    border-radius:999px; padding:7px 12px; font-size:13px; font-weight:600; transition:.15s}
+  .addbtn:hover{border-color:var(--brand); color:var(--brand)}
+  .breakdown{margin-top:14px; border-top:1px dashed var(--line); padding-top:12px; font-size:13px; color:var(--sub)}
+  .breakdown div{display:flex; justify-content:space-between; padding:3px 0}
+
+  .row{display:flex; gap:10px; flex-wrap:wrap}
+  .row .cta{flex:1; justify-content:center; min-width:140px}
+
+  /* share card */
+  #shareCanvas{width:100%; max-width:340px; border-radius:18px; display:block; margin:0 auto;
+    box-shadow:0 24px 60px -20px rgba(0,0,0,.7)}
+  .sectit{font-size:13px; color:var(--mut); font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 12px}
+  .field{display:flex; gap:8px; margin-top:10px}
+  .field input{flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px;
+    color:var(--ink); font-size:15px; outline:none}
+  .field input:focus{border-color:var(--brand)}
+  .muted{color:var(--mut); font-size:12.5px; line-height:1.6}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600}
+  .ref{font-family:ui-monospace,Menlo,monospace; font-weight:800; color:var(--brand); letter-spacing:.06em}
+  .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+    background:#fff; color:#0b0d12; font-weight:700; padding:12px 18px; border-radius:12px; opacity:0; pointer-events:none;
+    transition:.25s; z-index:50; box-shadow:0 12px 30px -8px rgba(0,0,0,.5)}
+  .toast.on{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  .steps{display:flex; gap:6px; justify-content:center; margin:18px 0 4px}
+  .steps i{height:5px; width:26px; border-radius:9px; background:var(--line); transition:.2s}
+  .steps i.on{background:var(--brand); width:34px}
+
+  .loops{margin-top:26px}
+  .loops .li{display:flex; gap:12px; padding:13px 0; border-top:1px solid var(--line)}
+  .loops .li .n{flex:0 0 26px;height:26px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);
+    display:grid;place-items:center;font-size:12px;font-weight:800;color:var(--brand)}
+  .loops .li b{font-size:14.5px}
+  .loops .li p{margin:3px 0 0; color:var(--sub); font-size:13px; line-height:1.55}
+  /* gallery (남의 집 구경 — 소셜 증거/부러움 루프) */
+  .gallery{display:flex; gap:12px; overflow-x:auto; padding:2px 2px 10px; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch}
+  .gallery::-webkit-scrollbar{height:0}
+  .gcard{flex:0 0 152px; scroll-snap-align:start; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:10px; cursor:pointer; transition:.15s}
+  .gcard:hover{transform:translateY(-2px); border-color:var(--brand)}
+  .gcard canvas{width:100%; border-radius:9px; display:block}
+  .gcard .gl{font-size:12.5px; font-weight:700; margin-top:9px; letter-spacing:-.01em}
+  .gcard .gm{display:flex; align-items:center; gap:6px; margin-top:5px; font-size:11.5px; color:var(--sub)}
+  .gcard .gm .heart{color:var(--pink)}
+  .gtag{display:inline-block; font-size:10px; font-weight:700; color:var(--brand);
+    background:rgba(124,139,255,.13); border-radius:6px; padding:2px 7px}
+  .social{margin-top:14px; font-size:13px; color:var(--sub)}
+  .social b{color:var(--ink)}
+  footer{margin-top:40px; color:var(--mut); font-size:12px; text-align:center; line-height:1.7}
+  @media(max-width:520px){ .hero h1{font-size:28px} .est .big{font-size:23px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <div class="logo"><span class="dot">📦</span> movemate</div>
+    <span class="tag">growth MVP</span>
+  </div>
+
+  <!-- STAGE 0 : HERO -->
+  <section class="stage on" id="s0">
+    <div class="hero">
+      <h1>사진 한 장으로<br><span class="hl">내 방을 3D로.</span><br>이사 견적은 덤.</h1>
+      <p>방을 스캔하면 귀여운 3D 미니룸 카드가 만들어져요.<br>친구에게 자랑하고, 이사할 땐 트럭 몇 대·견적까지 한 번에.</p>
+      <div class="mt"><button class="cta lg" id="startBtn">✨ 무료로 내 방 만들기</button></div>
+      <p class="muted" style="margin-top:14px">앱 설치 없이 · 30초 · 데모는 실제 스캔된 방으로 체험</p>
+      <p class="social" id="socialProof"></p>
+    </div>
+
+    <div class="mt">
+      <div style="display:flex; align-items:center; gap:8px; margin:6px 2px 12px">
+        <span class="sectit" style="margin:0">남의 집 구경 — 지금 인기</span>
+        <span class="muted" style="margin-left:auto">🟢 실시간</span>
+      </div>
+      <div class="gallery" id="gallery"></div>
+    </div>
+
+    <div class="card mt loops">
+      <p class="sectit">왜 이게 사람을 끌어모으나요?</p>
+      <div class="li"><div class="n">1</div><div><b>공유되는 콘텐츠가 곧 광고</b><p>이사는 1~2년에 한 번. 그래서 "내 방 카드"라는 자랑거리로 평소에 붙잡습니다.</p></div></div>
+      <div class="li"><div class="n">2</div><div><b>설치 없는 웹 → 마찰 0</b><p>링크만 누르면 끝. 친구 초대도 링크 한 줄.</p></div></div>
+      <div class="li"><div class="n">3</div><div><b>견적으로 자연스럽게 수익화</b><p>재미로 들어와서 "어 이사 견적도 되네" → 업체 연결 커미션.</p></div></div>
+    </div>
+  </section>
+
+  <!-- STAGE 1 : SCAN/RESULT -->
+  <section class="stage" id="s1">
+    <div class="steps"><i class="on"></i><i></i><i></i></div>
+    <div id="viewer">
+      <div class="scan-overlay" id="scanOv">
+        <div style="font-size:30px">📡</div>
+        <div style="font-weight:800; font-size:16px" id="scanTxt">방 스캔 중…</div>
+        <div class="bar"><i id="scanBar"></i></div>
+      </div>
+      <div class="hint">드래그하면 돌아가요 · 손가락으로 확대</div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="row mt">
+      <button class="cta" id="toShareRoom">📤 내 방 카드 자랑하기</button>
+      <button class="cta sec" id="toEst" style="flex:0 0 auto">🚚 이사 견적</button>
+    </div>
+    <div style="text-align:center;margin-top:12px">
+      <a id="reScan" style="color:var(--mut);font-size:13px;cursor:pointer">↻ 다시 스캔</a>
+    </div>
+  </section>
+
+  <!-- STAGE 2 : ESTIMATE (우리집 전체) -->
+  <section class="stage" id="s2">
+    <div class="steps"><i></i><i class="on"></i><i></i></div>
+    <div class="card">
+      <p class="sectit" id="estTitle">이 방 하나만 옮기면</p>
+      <div class="est">
+        <div class="truck">🚚</div>
+        <div>
+          <div class="big" id="estTruck">—</div>
+          <div class="sub" id="estPrice">—</div>
+        </div>
+      </div>
+      <div class="callout" id="estNote"></div>
+      <div class="rooms" id="roomChips"></div>
+      <div class="addrooms" id="addRooms"></div>
+      <div class="breakdown" id="estBreak"></div>
+      <p class="muted" style="margin-top:12px">* 가구 부피·무게 기반 자동 산출(데모 근사). 실제 견적은 업체 방문/거리/층수에 따라 달라져요.</p>
+    </div>
+    <div class="row mt">
+      <button class="cta" id="toShare">📤 내 방 카드 공유하기</button>
+      <button class="cta sec" id="getQuote" style="flex:0 0 auto">업체 견적</button>
+    </div>
+  </section>
+
+  <!-- STAGE 3 : SHARE + WAITLIST -->
+  <section class="stage" id="s3">
+    <div class="steps"><i></i><i></i><i class="on"></i></div>
+    <canvas id="shareCanvas" width="540" height="675"></canvas>
+    <div class="row mt">
+      <button class="cta" id="dlCard">이미지 저장</button>
+      <button class="cta sec" id="kakao" style="flex:1">카카오로 공유</button>
+    </div>
+
+    <div class="card mt">
+      <p class="sectit">친구 초대 — 둘 다 프리미엄 1개월</p>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="pill">초대코드 <span class="ref" id="refCode">MOVE-····</span></span>
+        <button class="cta sec" id="copyRef" style="flex:0 0 auto; padding:10px 14px">초대링크 복사</button>
+      </div>
+    </div>
+
+    <div class="card mt">
+      <p class="sectit">내 방 사진으로 직접 만들기 — 곧 출시</p>
+      <p class="muted">웨이팅리스트에 등록하면 출시 때 1번으로 알려드려요. 먼저 등록한 만큼 프리미엄 무료.</p>
+      <div class="field">
+        <input id="email" type="email" inputmode="email" placeholder="이메일 주소" />
+        <button class="cta" id="joinBtn" style="flex:0 0 auto">등록</button>
+      </div>
+      <p class="muted" style="margin-top:10px" id="waitCount"></p>
+    </div>
+
+    <div class="row mt">
+      <button class="cta sec" id="restart" style="flex:1">처음으로</button>
+    </div>
+  </section>
+
+  <footer>
+    바이럴 루프: 스캔 → 3D 카드 → 공유/초대 → 신규 유입 → 이사 견적 수익화<br>
+    <a href="./landing.html" style="color:var(--brand);text-decoration:none">↗ 검색 유입용 SEO 랜딩 데모 보기</a>
+    &nbsp;·&nbsp; movemate growth MVP · 합성 데모 데이터 기반
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="diag" style="display:none"></div>
+<div id="banner"></div>
+
+<script>
+// 진단용 전역 에러 캐처 + 화면에 보이는 경고 배너(콘솔 없이 원인 파악)
+(function(){
+  function diag(m){ var d=document.getElementById("diag"); if(d) d.textContent += m+"\n"; }
+  function banner(msg){
+    var b=document.getElementById("banner"); if(!b) return;
+    b.style.cssText="display:block;position:fixed;left:0;right:0;top:0;z-index:9999;"+
+      "background:#b3261e;color:#fff;padding:12px 16px;font:600 13px/1.55 -apple-system,sans-serif";
+    b.innerHTML=msg;
+  }
+  window.addEventListener("error", function(e){
+    var file=((e.filename||"").split("/").pop());
+    var m=(e.message||(e.error&&e.error.message)||"error")+(file?(" @"+file+":"+(e.lineno||"")):"");
+    diag("[ERR] "+m);
+    banner("⚠️ 로딩 오류: "+m+"<br><span style='font-weight:400'>· 파일을 더블클릭(file://)으로 열지 말고 <b>http://localhost:8777</b> 로 여세요<br>· 안 되면 <b>시크릿 창</b>으로 열거나 Cmd+Shift+R 강력 새로고침</span>");
+  });
+  window.addEventListener("unhandledrejection", function(e){
+    var m=(e.reason&&e.reason.message)||e.reason||"promise rejection";
+    diag("[ERR] promise: "+m); banner("⚠️ 로딩 오류(promise): "+m);
+  });
+  // 워치독: 앱 모듈이 2.5초 내 준비 안 되면 = 모듈 실행 실패(대개 file:// 또는 캐시/구형 브라우저)
+  window.addEventListener("load", function(){
+    setTimeout(function(){
+      if(!window.__mvReady){
+        banner("⚠️ 앱이 로드되지 않았어요 (스크립트 실행 실패).<br><span style='font-weight:400'>대개 ① 파일을 더블클릭(file://)으로 열었거나 ② 캐시/구형 브라우저입니다.<br><b>http://localhost:8777</b> 을 <b>시크릿 창(Cmd+Shift+N)</b>으로 여세요.</span>");
+      }
+    }, 2500);
+  });
+  window.__diagOK = function(){ var d=document.getElementById("diag"); return d && d.textContent.indexOf("[ERR]")<0; };
+})();
+</script>
+
+<script type="module">
+// import map 없이 직접 상대경로 import → 모든 브라우저(구형 Safari 포함)에서 동작
+import * as THREE from "./vendor/three.module.js";
+import { OrbitControls } from "./vendor/addons/controls/OrbitControls.js";
+import { ROOM, FURNITURE, GALLERY, ADD_ROOMS, autoPlace, estimate } from "./room-data.js";
+
+/* ---------- helpers ---------- */
+const $ = (s)=>document.querySelector(s);
+const toast = (m)=>{ const t=$("#toast"); t.textContent=m; t.classList.add("on"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("on"),1700); };
+function show(id){ document.querySelectorAll(".stage").forEach(s=>s.classList.remove("on")); $(id).classList.add("on"); window.scrollTo({top:0,behavior:"smooth"}); }
+
+// 방 중심(렌더 원점 보정)
+const cx = (ROOM.bounds.x[0]+ROOM.bounds.x[1])/2;
+const cz = (ROOM.bounds.z[0]+ROOM.bounds.z[1])/2;
+// 스캔한 "내 방" 하나의 견적 (Stage 1 통계 · 공유 카드용 — 정직하게 방 1개 기준)
+const ROOM_EST = estimate(FURNITURE);
+// "우리집" 합산 상태 — 내 방(고정) + 사용자가 추가한 방들
+const added = new Set();               // ADD_ROOMS 인덱스 집합
+function homeFurniture(){ return [...FURNITURE, ...[...added].flatMap(i=>ADD_ROOMS[i].furniture)]; }
+function homeEst(){ return estimate(homeFurniture()); }
+function roomCount(){ return 1 + added.size; }
+
+/* ---------- 3D miniature room ---------- */
+let renderer, scene, camera, controls, furnGroup, three3Dok=false;
+// WebGL 실패해도 퍼널(견적/카드)은 살아남도록 분리 + 2D 폴백
+function init3D(){
+  try{ initThree(); three3Dok=true; }
+  catch(e){
+    three3Dok=false;
+    const d=document.getElementById("diag"); if(d) d.textContent += "[WARN] WebGL 미지원 → 2D 폴백\n";
+    render2DFallback();
+  }
+}
+function render2DFallback(){
+  const host=$("#viewer"); if(!host) return;
+  // 기존 캔버스 제거 후 2D 평면 카드
+  host.querySelectorAll("canvas").forEach(c=>c.remove());
+  const cv=document.createElement("canvas");
+  const w=host.clientWidth||520; cv.width=w; cv.height=w; cv.style.width="100%"; cv.style.display="block";
+  host.appendChild(cv);
+  const g=cv.getContext("2d");
+  const bg=g.createLinearGradient(0,0,0,cv.height); bg.addColorStop(0,"#222a3d"); bg.addColorStop(1,"#12151d");
+  g.fillStyle=bg; g.fillRect(0,0,cv.width,cv.height);
+  drawTopView(g, cv.width*0.08, cv.height*0.10, cv.width*0.84, cv.height*0.72, ROOM.boundary, FURNITURE);
+  g.fillStyle="#9aa3b2"; g.font="500 13px -apple-system,sans-serif"; g.textAlign="center";
+  g.fillText("2D 평면 보기 (이 기기는 3D 미지원)", cv.width/2, cv.height*0.95);
+  g.textAlign="left";
+}
+function initThree(){
+  const host = $("#viewer");
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, preserveDrawingBuffer:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(host.clientWidth, host.clientHeight);
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  host.appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(38, host.clientWidth/host.clientHeight, 0.1, 100);
+  camera.position.set(7.5, 8, 9);
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = .08;
+  controls.minDistance = 6; controls.maxDistance = 20; controls.maxPolarAngle = Math.PI*0.46;
+  controls.autoRotate = true; controls.autoRotateSpeed = .8; controls.target.set(0,0.4,0);
+
+  scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x2a2f3d, 1.05));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.4);
+  dir.position.set(6,12,4); dir.castShadow=true;
+  dir.shadow.mapSize.set(1024,1024); dir.shadow.camera.left=-8; dir.shadow.camera.right=8;
+  dir.shadow.camera.top=8; dir.shadow.camera.bottom=-8; dir.shadow.radius=4;
+  scene.add(dir);
+
+  // shadow-catcher ground
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(60,60),
+    new THREE.ShadowMaterial({opacity:.22}));
+  ground.rotation.x=-Math.PI/2; ground.position.y=-0.02; ground.receiveShadow=true;
+  scene.add(ground);
+
+  buildRoom();
+  buildFurniture();
+
+  addEventListener("resize", ()=>{ if(!host.clientWidth) return;
+    camera.aspect=host.clientWidth/host.clientHeight; camera.updateProjectionMatrix();
+    renderer.setSize(host.clientWidth,host.clientHeight); });
+
+  (function loop(){ requestAnimationFrame(loop); controls.update();
+    furnGroup.children.forEach(o=>{ if(o.userData.t!==undefined){
+      o.userData.t=Math.min(1,o.userData.t+0.06);
+      const e=1-Math.pow(1-o.userData.t,3);
+      o.scale.setScalar(e); o.position.y=o.userData.y0*e + 2.2*(1-e);
+    }});
+    renderer.render(scene,camera); })();
+}
+
+function buildRoom(){
+  // floor from boundary polygon
+  const shape = new THREE.Shape();
+  ROOM.boundary.forEach(([x,z],i)=>{ const px=x-cx, pz=z-cz; i?shape.lineTo(px,pz):shape.moveTo(px,pz); });
+  const floorGeo = new THREE.ShapeGeometry(shape);
+  const floor = new THREE.Mesh(floorGeo, new THREE.MeshStandardMaterial({color:0xece3d6, roughness:.95}));
+  floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
+
+  // low dollhouse walls along each edge
+  const wallH = 0.95, wallT = 0.07;
+  const wallMat = new THREE.MeshStandardMaterial({color:0xf6f2ec, roughness:.9});
+  const wallMat2 = new THREE.MeshStandardMaterial({color:0xe9e3d8, roughness:.9});
+  for(let i=0;i<ROOM.boundary.length-1;i++){
+    const a=ROOM.boundary[i], b=ROOM.boundary[i+1];
+    const ax=a[0]-cx, az=a[1]-cz, bx=b[0]-cx, bz=b[1]-cz;
+    const len=Math.hypot(bx-ax,bz-az); if(len<0.05) continue;
+    const w=new THREE.Mesh(new THREE.BoxGeometry(len,wallH,wallT), i%2?wallMat2:wallMat);
+    w.position.set((ax+bx)/2, wallH/2, (az+bz)/2);
+    w.rotation.y=-Math.atan2(bz-az,bx-ax);
+    w.castShadow=true; w.receiveShadow=true; scene.add(w);
+  }
+}
+
+function makeLabel(txt){
+  const c=document.createElement("canvas"); c.width=c.height=128;
+  const x=c.getContext("2d"); x.font="84px serif"; x.textAlign="center"; x.textBaseline="middle";
+  x.fillText(txt,64,72);
+  const tx=new THREE.CanvasTexture(c); tx.anisotropy=4;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tx,transparent:true,depthWrite:false}));
+  sp.scale.setScalar(0.6); return sp;
+}
+
+function buildFurniture(){
+  furnGroup = new THREE.Group(); scene.add(furnGroup);
+  FURNITURE.forEach((f,idx)=>{
+    const g=new THREE.Group();
+    const geo=new THREE.BoxGeometry(f.w,f.h,f.d);
+    const mat=new THREE.MeshStandardMaterial({color:new THREE.Color(f.color), roughness:.7, metalness:.05});
+    const box=new THREE.Mesh(geo,mat); box.castShadow=true; box.receiveShadow=true;
+    // subtle top edge highlight
+    const edges=new THREE.LineSegments(new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({color:0x000000, transparent:true, opacity:.12}));
+    g.add(box); g.add(edges);
+    const lab=makeLabel(f.icon); lab.position.y=f.h/2+0.45; g.add(lab);
+    g.position.set(f.x-cx, f.h/2, f.z-cz); g.rotation.y=f.rot;
+    g.userData.y0=f.h/2; g.userData.t=-idx*0.12; // staggered drop-in
+    g.scale.setScalar(0.001);
+    furnGroup.add(g);
+  });
+}
+
+/* ---------- stats / estimate UI ---------- */
+function renderStats(){
+  $("#stats").innerHTML = `
+    <div class="stat"><b>${ROOM_EST.itemCount}</b><span>인식된 가구</span></div>
+    <div class="stat"><b>${ROOM_EST.loadVolume}㎥</b><span>이 방 짐 부피</span></div>
+    <div class="stat"><b>${ROOM_EST.totalWeight.toLocaleString()}kg</b><span>이 방 무게</span></div>`;
+}
+// 우리집 전체 견적 — 방을 추가할수록 합산되어 진짜 이사 견적이 된다.
+function renderHome(){
+  const e = homeEst(), n = roomCount();
+  $("#estTitle").textContent = n===1 ? "이 방 하나만 옮기면" : `우리집 전체 (방 ${n}곳) 이사하면`;
+  $("#estTruck").textContent = `${e.truck} 필요`;
+  $("#estPrice").textContent = `예상 견적 ${e.priceLow}~${e.priceHigh}만원 (포장이사 기준)`;
+
+  // 정직한 안내: 방 1개면 "이건 방 하나 기준"임을 분명히 한다.
+  $("#estNote").innerHTML = n===1
+    ? `👆 이건 <b>방 하나 기준</b>이에요. 원룸이면 이게 전체, 더 큰 집이면 아래에서 방을 추가하세요.`
+    : `🏠 스캔한 내 방 + 추가한 방 <b>${n}곳</b>을 합산한 <b>우리집 전체</b> 견적이에요.`;
+
+  // 현재 포함된 방 칩
+  const chips = [`<span class="chip fixed">📦 내 방 <span style="color:var(--mut);font-weight:500">·스캔</span></span>`]
+    .concat([...added].map(i=>`<span class="chip">${ADD_ROOMS[i].icon} ${ADD_ROOMS[i].name} <span class="x" data-rm="${i}">✕</span></span>`));
+  $("#roomChips").innerHTML = chips.join("");
+
+  // 추가 가능한 방 버튼
+  $("#addRooms").innerHTML = ADD_ROOMS
+    .map((r,i)=> added.has(i) ? "" : `<button class="addbtn" data-add="${i}">＋ ${r.icon} ${r.name}</button>`)
+    .join("");
+
+  $("#estBreak").innerHTML = `
+    <div><span>짐 부피</span><b>${e.loadVolume}㎥ (가구 ${e.rawVolume}㎥ × 적재계수)</b></div>
+    <div><span>추천 차량</span><b>${e.truck}</b></div>
+    <div><span>총 무게</span><b>${e.totalWeight.toLocaleString()}kg · 가구 ${e.itemCount}개</b></div>`;
+
+  // 클릭 핸들러(추가/제거 → 재계산)
+  $("#addRooms").querySelectorAll("[data-add]").forEach(b=>
+    b.onclick=()=>{ added.add(+b.dataset.add); renderHome(); });
+  $("#roomChips").querySelectorAll("[data-rm]").forEach(b=>
+    b.onclick=()=>{ added.delete(+b.dataset.rm); renderHome(); });
+}
+
+/* ---------- shareable card (the viral artifact) ---------- */
+function drawShareCard(){
+  const cv=$("#shareCanvas"), g=cv.getContext("2d"), W=cv.width, H=cv.height;
+  // bg gradient
+  const bg=g.createLinearGradient(0,0,W,H); bg.addColorStop(0,"#1b1f2e"); bg.addColorStop(1,"#0e1014");
+  g.fillStyle=bg; g.fillRect(0,0,W,H);
+  // brand
+  g.fillStyle="#7c8bff"; roundRect(g,36,36,40,40,11); g.fill();
+  g.fillStyle="#fff"; g.font="22px serif"; g.textAlign="center"; g.fillText("📦",56,64);
+  g.textAlign="left"; g.font="800 24px -apple-system,sans-serif"; g.fillStyle="#eef1f7"; g.fillText("movemate",90,65);
+
+  // headline
+  g.font="800 34px -apple-system,sans-serif"; g.fillStyle="#fff";
+  g.fillText("내 방 카드", 36, 130);
+  g.font="500 17px -apple-system,sans-serif"; g.fillStyle="#9aa3b2";
+  g.fillText(ROOM.label, 36, 160);
+
+  // room top-view thumbnail
+  drawTopView(g, 36, 188, W-72, 300, ROOM.boundary, FURNITURE);
+
+  // big stat band
+  g.fillStyle="#161922"; roundRect(g,36,506,W-72,120,18); g.fill();
+  const items=[[ROOM_EST.itemCount+"개","가구"],[ROOM_EST.loadVolume+"㎥","이 방 짐 부피"],[ROOM_EST.totalWeight.toLocaleString()+"kg","무게"]];
+  items.forEach((it,i)=>{
+    const x=36+(W-72)*(i+0.5)/3;
+    g.textAlign="center";
+    g.font="800 26px -apple-system,sans-serif"; g.fillStyle="#fff"; g.fillText(it[0],x,556);
+    g.font="500 14px -apple-system,sans-serif"; g.fillStyle="#9aa3b2"; g.fillText(it[1],x,584);
+  });
+  // footer cta
+  g.textAlign="center"; g.font="600 16px -apple-system,sans-serif"; g.fillStyle="#a78bfa";
+  g.fillText("나도 내 방 카드 만들기 →  movemate", W/2, 652);
+  g.textAlign="left";
+}
+function drawTopView(g,ox,oy, w,h, boundary, furniture, opt={}){
+  const pad=opt.pad??20, radius=opt.radius??16, bg=opt.bg??"#0e1014";
+  const xs=boundary.map(p=>p[0]), zs=boundary.map(p=>p[1]);
+  const minx=Math.min(...xs),maxx=Math.max(...xs),minz=Math.min(...zs),maxz=Math.max(...zs);
+  const sc=Math.min((w-pad*2)/(maxx-minx),(h-pad*2)/(maxz-minz));
+  const offx=ox+(w-(maxx-minx)*sc)/2, offz=oy+(h-(maxz-minz)*sc)/2;
+  const X=x=>offx+(x-minx)*sc, Z=z=>offz+(z-minz)*sc;
+  // panel bg
+  g.fillStyle=bg; roundRect(g,ox,oy,w,h,radius); g.fill();
+  // floor polygon
+  g.beginPath(); boundary.forEach((p,i)=>{ const px=X(p[0]),pz=Z(p[1]); i?g.lineTo(px,pz):g.moveTo(px,pz); });
+  g.closePath(); g.fillStyle="#2a3142"; g.fill(); g.lineWidth=opt.line??3; g.strokeStyle="#7c8bff"; g.stroke();
+  // furniture rects
+  furniture.forEach(f=>{
+    g.save(); g.translate(X(f.x),Z(f.z)); g.rotate(f.rot||0);
+    const fw=f.w*sc, fd=f.d*sc;
+    g.fillStyle=f.color; roundRect(g,-fw/2,-fd/2,fw,fd,Math.max(2,3*sc/40)); g.fill();
+    g.restore();
+  });
+}
+function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y);
+  g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+
+/* ---------- waitlist + referral (localStorage demo) ---------- */
+const LS="movemate_mvp";
+function store(){ try{return JSON.parse(localStorage.getItem(LS))||{}}catch{return{}} }
+function save(o){ localStorage.setItem(LS,JSON.stringify(o)); }
+function refCode(){ let s=store(); if(!s.ref){ s.ref="MOVE-"+Math.random().toString(36).slice(2,6).toUpperCase(); save(s);} return s.ref; }
+function waitCount(){ let s=store(); return (s.baseWait||1284)+((s.emails||[]).length); }
+function renderWait(){ $("#waitCount").textContent = `🟢 지금까지 ${waitCount().toLocaleString()}명 대기 중`; }
+
+/* ---------- flow wiring ---------- */
+let started=false;
+function runScan(){
+  $("#scanOv").style.display="grid"; const bar=$("#scanBar"), txt=$("#scanTxt");
+  const msgs=["방 스캔 중…","벽·바닥 인식 중…","가구 찾는 중…","3D 미니룸 만드는 중…"];
+  let p=0,mi=0; bar.style.width="0";
+  // reset furniture drop-in
+  if(furnGroup) furnGroup.children.forEach((o,i)=>{ o.userData.t=-i*0.12; o.scale.setScalar(0.001); });
+  const iv=setInterval(()=>{ p+=Math.random()*16+7; if(p>100)p=100;
+    bar.style.width=p+"%"; const m=Math.min(msgs.length-1,Math.floor(p/26)); if(m!==mi){mi=m; txt.textContent=msgs[m];}
+    if(p>=100){ clearInterval(iv); setTimeout(()=>$("#scanOv").style.display="none",350); }
+  },240);
+}
+
+function start(){ show("#s1"); if(!started){ started=true; renderStats(); init3D(); } runScan(); }
+$("#startBtn").onclick=start;
+
+/* 갤러리 — "남의 집 구경" 소셜 증거/부러움 루프 */
+function renderGallery(){
+  const host=$("#gallery"); if(!host) return; host.innerHTML="";
+  GALLERY.forEach(item=>{
+    const furn=autoPlace(item.boundary,item.furniture);
+    const card=document.createElement("div"); card.className="gcard";
+    const cv=document.createElement("canvas"); cv.width=264; cv.height=200;
+    const g=cv.getContext("2d");
+    const grad=g.createLinearGradient(0,0,0,200); grad.addColorStop(0,"#222a3d"); grad.addColorStop(1,"#12151d");
+    g.fillStyle=grad; g.fillRect(0,0,264,200);
+    drawTopView(g,12,12,240,176,item.boundary,furn,{pad:14,radius:10,line:2});
+    card.appendChild(cv);
+    const lab=document.createElement("div"); lab.className="gl"; lab.textContent=item.label; card.appendChild(lab);
+    const meta=document.createElement("div"); meta.className="gm";
+    meta.innerHTML=`<span class="gtag">${item.region}</span><span class="heart">♥</span>${item.likes}`;
+    card.appendChild(meta);
+    card.onclick=start;
+    host.appendChild(card);
+  });
+}
+$("#reScan").onclick=runScan;
+function goShare(){ drawShareCard(); $("#refCode").textContent=refCode(); renderWait(); show("#s3"); }
+$("#toEst").onclick=()=>{ renderHome(); show("#s2"); };
+$("#toShareRoom").onclick=goShare;
+$("#toShare").onclick=goShare;
+$("#getQuote").onclick=()=>toast("업체 견적 연결은 다음 버전에서 🚚 (수익화 지점)");
+$("#dlCard").onclick=()=>{ const a=document.createElement("a"); a.download="movemate-room-card.png"; a.href=$("#shareCanvas").toDataURL("image/png"); a.click(); toast("카드 저장 완료 — SNS에 올려보세요"); };
+$("#kakao").onclick=()=>toast("카카오 공유는 앱키 연동 시 활성화 (데모)");
+$("#copyRef").onclick=async()=>{ const link=`${location.origin}${location.pathname}?ref=${refCode()}`;
+  try{ await navigator.clipboard.writeText(link); toast("초대링크 복사됨 — 친구에게 보내기"); }catch{ toast(link); } };
+$("#joinBtn").onclick=()=>{ const v=$("#email").value.trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast("이메일을 확인해주세요"); return; }
+  const s=store(); s.emails=(s.emails||[]); if(!s.emails.includes(v)) s.emails.push(v); save(s);
+  $("#email").value=""; renderWait(); toast("등록 완료 🎉 출시 1번으로 알려드릴게요"); };
+$("#restart").onclick=()=>show("#s0");
+
+// 소셜 증거 + 갤러리 (랜딩 설득 요소)
+function renderSocial(){
+  const el=$("#socialProof");
+  if(el) el.innerHTML = `🟢 지금까지 <b>${waitCount().toLocaleString()}명</b>이 내 방 카드를 만들었어요`;
+}
+renderSocial();
+renderGallery();
+
+// referral attribution from URL
+const qp=new URLSearchParams(location.search);
+const ref=qp.get("ref");
+if(ref){ const s=store(); if(!s.invitedBy){ s.invitedBy=ref; save(s);} }
+
+// 자동 셀프테스트: ?selftest=1 → 핵심 동작을 검증해 #diag에 PASS/FAIL 기록
+if(qp.get("selftest")){
+  const d=document.getElementById("diag");
+  const T=(name,ok)=>{ if(d) d.textContent += `[TEST] ${name}: ${ok?"PASS":"FAIL"}\n`; };
+  try{
+    // 1) 견적 산출 (방 1개)
+    T("estimate.truck", typeof ROOM_EST.truck==="string" && ROOM_EST.truck.includes("대"));
+    T("estimate.price", ROOM_EST.priceLow>0 && ROOM_EST.priceHigh>ROOM_EST.priceLow);
+    // 1b) 우리집 합산: 방을 추가하면 부피·금액이 커진다
+    const e1=homeEst(); added.add(0); const e2=homeEst(); added.delete(0);
+    T("home.aggregate", e2.loadVolume>e1.loadVolume && e2.priceHigh>=e1.priceHigh && roomCount()===1);
+    // 2) 갤러리: GALLERY 개수만큼 카드+캔버스
+    const gcards=document.querySelectorAll("#gallery .gcard");
+    T("gallery.count", gcards.length===GALLERY.length);
+    T("gallery.canvas", [...gcards].every(c=>c.querySelector("canvas")));
+    // 3) 공유 카드 PNG 생성
+    drawShareCard();
+    const url=$("#shareCanvas").toDataURL("image/png");
+    T("shareCard.png", url.startsWith("data:image/png") && url.length>5000);
+    // 4) 초대 링크 형식
+    const code=refCode();
+    T("invite.code", /^MOVE-[A-Z0-9]{4}$/.test(code));
+    // 5) 견적 DOM 렌더 + 방 추가 메커니즘
+    renderHome();
+    T("estimate.dom", $("#estTruck").textContent.includes("필요"));
+    T("addrooms.dom", $("#addRooms").querySelectorAll(".addbtn").length===ADD_ROOMS.length);
+    // 5b) 방 추가 클릭 → "우리집 전체"로 재계산되는지 (E2E 인터랙션)
+    const before=$("#estTruck").textContent;
+    $("#addRooms").querySelector(".addbtn").click();
+    const okTitle=$("#estTitle").textContent.includes("우리집");
+    const okChipRm=$("#roomChips").querySelectorAll("[data-rm]").length===1;
+    $("#roomChips").querySelector("[data-rm]").click();           // 제거 → 원상복구
+    const okRevert=$("#estTitle").textContent.includes("이 방 하나") && roomCount()===1;
+    T("addroom.click", okTitle && okChipRm && okRevert);
+    // 6) 통계 DOM
+    renderStats();
+    T("stats.dom", $("#stats").querySelectorAll(".stat").length===3);
+    // 7) 2D 폴백 함수 안전 동작
+    render2DFallback();
+    T("fallback.safe", true);
+    // 8) 이메일 검증 로직
+    const reEmail=/^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    T("email.validate", reEmail.test("a@b.com") && !reEmail.test("bad"));
+    if(d) d.textContent += "[SELFTEST DONE]\n";
+  }catch(err){ if(d) d.textContent += "[ERR] selftest: "+(err&&err.message||err)+"\n"; }
+}
+
+// 실제 버튼 클릭 재현 테스트: ?clicktest=1
+if(qp.get("clicktest")){
+  const d=document.getElementById("diag");
+  const btn=document.getElementById("startBtn");
+  if(d) d.textContent += "[CLICK] startBtn 존재: "+(!!btn)+", onclick연결: "+(typeof btn?.onclick)+"\n";
+  try{
+    btn.click();
+    if(d) d.textContent += "[CLICK] 클릭후 s1 활성: "+document.getElementById("s1").classList.contains("on")+"\n";
+  }catch(e){ if(d) d.textContent += "[ERR] click: "+(e&&e.message||e)+"\n"; }
+}
+
+// 진단/데모 자동 실행 모드: ?auto=share 면 끝까지 진행해 렌더 검증 가능
+const auto=qp.get("auto");
+if(auto){
+  try{
+    show("#s1"); started=true; renderStats(); init3D();
+    $("#scanOv").style.display="none";
+    renderHome();
+    drawShareCard(); $("#refCode").textContent=refCode(); renderWait();
+    if(auto==="share") show("#s3"); else if(auto==="est") show("#s2");
+    const d=document.getElementById("diag"); if(d) d.textContent += "[READY] auto="+auto+" 3D="+three3Dok+"\n";
+  }catch(err){ const d=document.getElementById("diag"); if(d) d.textContent += "[ERR] auto: "+(err&&err.message||err)+"\n"; }
+}
+
+// 모듈이 끝까지 실행됐음을 알림(워치독이 이 플래그로 로드 성공 판단)
+window.__mvReady = true;
+</script>
+</body>
+</html>

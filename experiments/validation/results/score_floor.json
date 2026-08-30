@@ -1,0 +1,431 @@
+{
+  "summary": {
+    "scenes": 60,
+    "errors": 0,
+    "mean_boundary_iou": 0.652,
+    "median_boundary_iou": 0.679,
+    "mean_area_ratio": 1.206
+  },
+  "per_scene": [
+    {
+      "id": "41098157",
+      "iou": 0.646,
+      "area_ratio": 1.079,
+      "gt_area": 14.0,
+      "pred_area": 15.1
+    },
+    {
+      "id": "41126341",
+      "iou": 0.741,
+      "area_ratio": 0.835,
+      "gt_area": 35.0,
+      "pred_area": 29.2
+    },
+    {
+      "id": "41126700",
+      "iou": 0.733,
+      "area_ratio": 1.106,
+      "gt_area": 33.9,
+      "pred_area": 37.5
+    },
+    {
+      "id": "41159641",
+      "iou": 0.577,
+      "area_ratio": 1.488,
+      "gt_area": 19.0,
+      "pred_area": 28.3
+    },
+    {
+      "id": "41159694",
+      "iou": 0.527,
+      "area_ratio": 1.739,
+      "gt_area": 36.5,
+      "pred_area": 63.5
+    },
+    {
+      "id": "41159850",
+      "iou": 0.599,
+      "area_ratio": 1.58,
+      "gt_area": 26.5,
+      "pred_area": 41.9
+    },
+    {
+      "id": "41291637",
+      "iou": 0.523,
+      "area_ratio": 1.639,
+      "gt_area": 11.5,
+      "pred_area": 18.9
+    },
+    {
+      "id": "42444513",
+      "iou": 0.662,
+      "area_ratio": 1.1,
+      "gt_area": 14.3,
+      "pred_area": 15.7
+    },
+    {
+      "id": "42444579",
+      "iou": 0.81,
+      "area_ratio": 0.919,
+      "gt_area": 47.1,
+      "pred_area": 43.3
+    },
+    {
+      "id": "42445168",
+      "iou": 0.853,
+      "area_ratio": 1.015,
+      "gt_area": 44.1,
+      "pred_area": 44.8
+    },
+    {
+      "id": "42445476",
+      "iou": 0.619,
+      "area_ratio": 0.972,
+      "gt_area": 19.2,
+      "pred_area": 18.6
+    },
+    {
+      "id": "42445602",
+      "iou": 0.585,
+      "area_ratio": 1.686,
+      "gt_area": 32.2,
+      "pred_area": 54.3
+    },
+    {
+      "id": "42446050",
+      "iou": 0.629,
+      "area_ratio": 1.501,
+      "gt_area": 23.5,
+      "pred_area": 35.3
+    },
+    {
+      "id": "42446576",
+      "iou": 0.609,
+      "area_ratio": 1.338,
+      "gt_area": 15.3,
+      "pred_area": 20.5
+    },
+    {
+      "id": "42897523",
+      "iou": 0.693,
+      "area_ratio": 1.068,
+      "gt_area": 32.4,
+      "pred_area": 34.6
+    },
+    {
+      "id": "42897815",
+      "iou": 0.573,
+      "area_ratio": 1.376,
+      "gt_area": 21.3,
+      "pred_area": 29.4
+    },
+    {
+      "id": "42898470",
+      "iou": 0.791,
+      "area_ratio": 0.987,
+      "gt_area": 48.3,
+      "pred_area": 47.7
+    },
+    {
+      "id": "42898701",
+      "iou": 0.815,
+      "area_ratio": 1.067,
+      "gt_area": 50.9,
+      "pred_area": 54.3
+    },
+    {
+      "id": "42899287",
+      "iou": 0.599,
+      "area_ratio": 1.327,
+      "gt_area": 19.2,
+      "pred_area": 25.5
+    },
+    {
+      "id": "42899822",
+      "iou": 0.73,
+      "area_ratio": 1.04,
+      "gt_area": 22.1,
+      "pred_area": 23.0
+    },
+    {
+      "id": "42899854",
+      "iou": 0.692,
+      "area_ratio": 1.341,
+      "gt_area": 44.3,
+      "pred_area": 59.3
+    },
+    {
+      "id": "43896019",
+      "iou": 0.265,
+      "area_ratio": 3.203,
+      "gt_area": 5.1,
+      "pred_area": 16.5
+    },
+    {
+      "id": "43896247",
+      "iou": 0.76,
+      "area_ratio": 1.041,
+      "gt_area": 11.6,
+      "pred_area": 12.1
+    },
+    {
+      "id": "43896386",
+      "iou": 0.701,
+      "area_ratio": 0.94,
+      "gt_area": 28.7,
+      "pred_area": 27.0
+    },
+    {
+      "id": "44358360",
+      "iou": 0.765,
+      "area_ratio": 1.117,
+      "gt_area": 50.2,
+      "pred_area": 56.1
+    },
+    {
+      "id": "44358422",
+      "iou": 0.56,
+      "area_ratio": 0.56,
+      "gt_area": 4.2,
+      "pred_area": 2.4
+    },
+    {
+      "id": "44358661",
+      "iou": 0.683,
+      "area_ratio": 1.282,
+      "gt_area": 79.6,
+      "pred_area": 102.0
+    },
+    {
+      "id": "44358693",
+      "iou": 0.668,
+      "area_ratio": 1.078,
+      "gt_area": 40.8,
+      "pred_area": 44.0
+    },
+    {
+      "id": "44796358",
+      "iou": 0.764,
+      "area_ratio": 1.239,
+      "gt_area": 26.7,
+      "pred_area": 33.1
+    },
+    {
+      "id": "44796745",
+      "iou": 0.726,
+      "area_ratio": 0.951,
+      "gt_area": 71.5,
+      "pred_area": 68.0
+    },
+    {
+      "id": "45261378",
+      "iou": 0.773,
+      "area_ratio": 0.905,
+      "gt_area": 53.1,
+      "pred_area": 48.1
+    },
+    {
+      "id": "45261509",
+      "iou": 0.708,
+      "area_ratio": 1.208,
+      "gt_area": 24.7,
+      "pred_area": 29.8
+    },
+    {
+      "id": "45261569",
+      "iou": 0.773,
+      "area_ratio": 1.013,
+      "gt_area": 12.4,
+      "pred_area": 12.5
+    },
+    {
+      "id": "47204275",
+      "iou": 0.46,
+      "area_ratio": 1.868,
+      "gt_area": 9.8,
+      "pred_area": 18.4
+    },
+    {
+      "id": "47204407",
+      "iou": 0.734,
+      "area_ratio": 0.87,
+      "gt_area": 16.4,
+      "pred_area": 14.3
+    },
+    {
+      "id": "47330996",
+      "iou": 0.706,
+      "area_ratio": 0.781,
+      "gt_area": 61.7,
+      "pred_area": 48.2
+    },
+    {
+      "id": "47331002",
+      "iou": 0.589,
+      "area_ratio": 1.569,
+      "gt_area": 19.1,
+      "pred_area": 30.0
+    },
+    {
+      "id": "47331276",
+      "iou": 0.582,
+      "area_ratio": 0.735,
+      "gt_area": 31.8,
+      "pred_area": 23.4
+    },
+    {
+      "id": "47331819",
+      "iou": 0.47,
+      "area_ratio": 0.644,
+      "gt_area": 4.7,
+      "pred_area": 3.1
+    },
+    {
+      "id": "47332232",
+      "iou": 0.559,
+      "area_ratio": 1.126,
+      "gt_area": 10.4,
+      "pred_area": 11.7
+    },
+    {
+      "id": "47332454",
+      "iou": 0.746,
+      "area_ratio": 1.04,
+      "gt_area": 15.9,
+      "pred_area": 16.5
+    },
+    {
+      "id": "47332473",
+      "iou": 0.688,
+      "area_ratio": 1.105,
+      "gt_area": 40.0,
+      "pred_area": 44.2
+    },
+    {
+      "id": "47332653",
+      "iou": 0.68,
+      "area_ratio": 1.057,
+      "gt_area": 27.1,
+      "pred_area": 28.7
+    },
+    {
+      "id": "47332986",
+      "iou": 0.543,
+      "area_ratio": 1.415,
+      "gt_area": 11.9,
+      "pred_area": 16.9
+    },
+    {
+      "id": "47333670",
+      "iou": 0.679,
+      "area_ratio": 1.238,
+      "gt_area": 36.9,
+      "pred_area": 45.7
+    },
+    {
+      "id": "47334655",
+      "iou": 0.437,
+      "area_ratio": 1.698,
+      "gt_area": 9.0,
+      "pred_area": 15.3
+    },
+    {
+      "id": "47334714",
+      "iou": 0.654,
+      "area_ratio": 1.46,
+      "gt_area": 21.8,
+      "pred_area": 31.8
+    },
+    {
+      "id": "47334957",
+      "iou": 0.693,
+      "area_ratio": 0.832,
+      "gt_area": 13.7,
+      "pred_area": 11.4
+    },
+    {
+      "id": "47430543",
+      "iou": 0.82,
+      "area_ratio": 0.993,
+      "gt_area": 12.0,
+      "pred_area": 11.9
+    },
+    {
+      "id": "47430805",
+      "iou": 0.661,
+      "area_ratio": 1.061,
+      "gt_area": 44.7,
+      "pred_area": 47.4
+    },
+    {
+      "id": "47431045",
+      "iou": 0.741,
+      "area_ratio": 1.226,
+      "gt_area": 26.9,
+      "pred_area": 33.0
+    },
+    {
+      "id": "47669943",
+      "iou": 0.722,
+      "area_ratio": 1.126,
+      "gt_area": 30.6,
+      "pred_area": 34.4
+    },
+    {
+      "id": "47670124",
+      "iou": 0.564,
+      "area_ratio": 1.556,
+      "gt_area": 22.3,
+      "pred_area": 34.8
+    },
+    {
+      "id": "47895656",
+      "iou": 0.737,
+      "area_ratio": 1.166,
+      "gt_area": 8.9,
+      "pred_area": 10.4
+    },
+    {
+      "id": "47895951",
+      "iou": 0.441,
+      "area_ratio": 1.549,
+      "gt_area": 5.0,
+      "pred_area": 7.7
+    },
+    {
+      "id": "47895972",
+      "iou": 0.603,
+      "area_ratio": 1.144,
+      "gt_area": 32.6,
+      "pred_area": 37.3
+    },
+    {
+      "id": "48018426",
+      "iou": 0.758,
+      "area_ratio": 0.838,
+      "gt_area": 23.6,
+      "pred_area": 19.7
+    },
+    {
+      "id": "48018542",
+      "iou": 0.476,
+      "area_ratio": 1.818,
+      "gt_area": 15.8,
+      "pred_area": 28.7
+    },
+    {
+      "id": "48458582",
+      "iou": 0.692,
+      "area_ratio": 0.967,
+      "gt_area": 10.5,
+      "pred_area": 10.1
+    },
+    {
+      "id": "48458716",
+      "iou": 0.522,
+      "area_ratio": 0.709,
+      "gt_area": 8.1,
+      "pred_area": 5.7
+    }
+  ]
+}

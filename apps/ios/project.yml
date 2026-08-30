@@ -1,0 +1,56 @@
+name: MoveViz
+options:
+  bundleIdPrefix: com.moveviz
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"   # iPhone only
+targets:
+  MoveViz:
+    type: application
+    platform: iOS
+    sources:
+      - path: MoveVizApp.swift
+      - path: App/RootTabView.swift
+      - path: App/ScanUploader.swift
+      - path: App/ResultView.swift
+      - path: App/FloorPlan3DView.swift
+      - path: App/FloorPlanView.swift
+      - path: App/MeshExporter.swift
+      - path: App/ModelViewer.swift
+      - path: App/MoveQuoteViews.swift
+      - path: App/PlanModel.swift
+      - path: App/QuoteEngine.swift
+      - path: App/ScanStore.swift
+      - path: App/SavedScansView.swift
+      - path: Modes/ModePickerView.swift
+      - path: Modes/CameraOnlyScanView.swift
+      - path: ScanManager.swift
+      - path: ARScanView.swift
+      - path: ScanningView.swift
+      - path: MiniMapView.swift
+      - path: PLYExporter.swift
+      - path: RoomPlanSpike/RoomPlanSpikeManager.swift
+      - path: RoomPlanSpike/RoomPlanSpikeView.swift
+      - path: RoomPlanSpike/RoomPlanModeView.swift
+      - path: RoomPlanSpike/KeyframeRecorder.swift
+      - path: RoomPlanSpike/PhotogrammetryManager.swift
+      - path: Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.moveviz.app
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        # ARKit/RealityKit frameworks are linked automatically via `import`.
+    dependencies:
+      - sdk: ARKit.framework
+      - sdk: RealityKit.framework
+      - sdk: RoomPlan.framework   # iOS 17+ API는 @available 가드, iOS16 기기에선 weak-link

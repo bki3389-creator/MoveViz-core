@@ -1,0 +1,22 @@
+[
+  {
+    "label": "custom",
+    "params": {
+      "split_min_dist": 0.18,
+      "split_area": 1.5,
+      "min_area": 0.04,
+      "noise_filter": true,
+      "nf_min_area": 0.12,
+      "nf_max_aspect": 5.0
+    },
+    "result": {
+      "P@.25": 0.268,
+      "R@.25": 0.424,
+      "P@.5": 0.072,
+      "R@.5": 0.114,
+      "tot_pred": 606,
+      "tot_gt": 394,
+      "F1@.25": 0.328
+    }
+  }
+]

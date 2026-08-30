@@ -1,0 +1,545 @@
+[
+  {
+    "id": "41098157",
+    "vertices": 473103,
+    "mesh_mb": 18.9,
+    "floor_area_m2": 13.2,
+    "height_m": 5.05,
+    "furniture_count": 6,
+    "labels": {
+      "cabinet": 2,
+      "bed": 1,
+      "table": 2,
+      "stool": 1
+    },
+    "topdown": "results/preview/41098157_topdown.png",
+    "rgb": "data/3dod/Training/41098157/41098157_frames/lowres_wide/41098157_2739.746.png",
+    "frame_count": 925
+  },
+  {
+    "id": "41126700",
+    "vertices": 1182304,
+    "mesh_mb": 47.2,
+    "floor_area_m2": 39.9,
+    "height_m": 5.0,
+    "furniture_count": 25,
+    "labels": {
+      "sofa": 2,
+      "table": 2,
+      "tv_monitor": 1,
+      "chair": 4,
+      "refrigerator": 1,
+      "cabinet": 11,
+      "oven": 1,
+      "washer": 1,
+      "sink": 1,
+      "stove": 1
+    },
+    "topdown": "results/preview/41126700_topdown.png",
+    "rgb": "data/3dod/Training/41126700/41126700_frames/lowres_wide/41126700_3781.597.png",
+    "frame_count": 1862
+  },
+  {
+    "id": "41159641",
+    "vertices": 665215,
+    "mesh_mb": 26.5,
+    "floor_area_m2": 11.4,
+    "height_m": 10.23,
+    "furniture_count": 6,
+    "labels": {
+      "bed": 1,
+      "cabinet": 3,
+      "table": 1,
+      "stool": 1
+    },
+    "topdown": "results/preview/41159641_topdown.png",
+    "rgb": "data/3dod/Training/41159641/41159641_frames/lowres_wide/41159641_58289.003.png",
+    "frame_count": 737
+  },
+  {
+    "id": "41159694",
+    "vertices": 1734957,
+    "mesh_mb": 68.8,
+    "floor_area_m2": 41.1,
+    "height_m": 7.23,
+    "furniture_count": 20,
+    "labels": {
+      "table": 3,
+      "chair": 9,
+      "cabinet": 4,
+      "shelf": 1,
+      "sofa": 2,
+      "oven": 1
+    },
+    "topdown": "results/preview/41159694_topdown.png",
+    "rgb": "data/3dod/Training/41159694/41159694_frames/lowres_wide/41159694_48430.367.png",
+    "frame_count": 937
+  },
+  {
+    "id": "42444513",
+    "vertices": 398499,
+    "mesh_mb": 15.7,
+    "floor_area_m2": 19.3,
+    "height_m": 3.59,
+    "furniture_count": 4,
+    "labels": {
+      "bathtub": 1,
+      "cabinet": 1,
+      "toilet": 1,
+      "sink": 1
+    },
+    "topdown": "results/preview/42444513_topdown.png",
+    "rgb": "data/3dod/Training/42444513/42444513_frames/lowres_wide/42444513_3463.564.png",
+    "frame_count": 761
+  },
+  {
+    "id": "42445476",
+    "vertices": 685968,
+    "mesh_mb": 27.3,
+    "floor_area_m2": 21.4,
+    "height_m": 6.94,
+    "furniture_count": 13,
+    "labels": {
+      "table": 1,
+      "chair": 6,
+      "cabinet": 4,
+      "oven": 1,
+      "tv_monitor": 1
+    },
+    "topdown": "results/preview/42445476_topdown.png",
+    "rgb": "data/3dod/Training/42445476/42445476_frames/lowres_wide/42445476_152281.605.png",
+    "frame_count": 391
+  },
+  {
+    "id": "42446576",
+    "vertices": 685720,
+    "mesh_mb": 27.6,
+    "floor_area_m2": 22.1,
+    "height_m": 4.53,
+    "furniture_count": 9,
+    "labels": {
+      "sofa": 1,
+      "table": 4,
+      "tv_monitor": 2,
+      "chair": 1,
+      "fireplace": 1
+    },
+    "topdown": "results/preview/42446576_topdown.png",
+    "rgb": "data/3dod/Training/42446576/42446576_frames/lowres_wide/42446576_205896.263.png",
+    "frame_count": 639
+  },
+  {
+    "id": "43896019",
+    "vertices": 401155,
+    "mesh_mb": 15.6,
+    "floor_area_m2": 13.8,
+    "height_m": 6.47,
+    "furniture_count": 6,
+    "labels": {
+      "toilet": 1,
+      "shelf": 1,
+      "cabinet": 2,
+      "sink": 1,
+      "bed": 1
+    },
+    "topdown": "results/preview/43896019_topdown.png",
+    "rgb": "data/3dod/Training/43896019/43896019_frames/lowres_wide/43896019_138332.406.png",
+    "frame_count": 370
+  },
+  {
+    "id": "43896247",
+    "vertices": 463252,
+    "mesh_mb": 18.7,
+    "floor_area_m2": 16.7,
+    "height_m": 3.27,
+    "furniture_count": 4,
+    "labels": {
+      "bed": 2,
+      "cabinet": 2
+    },
+    "topdown": "results/preview/43896247_topdown.png",
+    "rgb": "data/3dod/Training/43896247/43896247_frames/lowres_wide/43896247_7606.402.png",
+    "frame_count": 398
+  },
+  {
+    "id": "44358422",
+    "vertices": 195839,
+    "mesh_mb": 7.9,
+    "floor_area_m2": 9.0,
+    "height_m": 1.2,
+    "furniture_count": 3,
+    "labels": {
+      "table": 1,
+      "toilet": 1,
+      "sink": 1
+    },
+    "topdown": "results/preview/44358422_topdown.png",
+    "rgb": "data/3dod/Training/44358422/44358422_frames/lowres_wide/44358422_41163.832.png",
+    "frame_count": 254
+  },
+  {
+    "id": "44358661",
+    "vertices": 2352392,
+    "mesh_mb": 94.2,
+    "floor_area_m2": 32.7,
+    "height_m": 11.53,
+    "furniture_count": 34,
+    "labels": {
+      "table": 1,
+      "chair": 11,
+      "cabinet": 10,
+      "sink": 2,
+      "stool": 5,
+      "oven": 2,
+      "tv_monitor": 1,
+      "fireplace": 1,
+      "shelf": 1
+    },
+    "topdown": "results/preview/44358661_topdown.png",
+    "rgb": "data/3dod/Training/44358661/44358661_frames/lowres_wide/44358661_1142.416.png",
+    "frame_count": 1370
+  },
+  {
+    "id": "44796745",
+    "vertices": 2396137,
+    "mesh_mb": 96.3,
+    "floor_area_m2": 33.5,
+    "height_m": 11.4,
+    "furniture_count": 13,
+    "labels": {
+      "sofa": 3,
+      "cabinet": 1,
+      "stool": 2,
+      "table": 5,
+      "fireplace": 1,
+      "tv_monitor": 1
+    },
+    "topdown": "results/preview/44796745_topdown.png",
+    "rgb": "data/3dod/Training/44796745/44796745_frames/lowres_wide/44796745_28703.284.png",
+    "frame_count": 1217
+  },
+  {
+    "id": "45261509",
+    "vertices": 1109402,
+    "mesh_mb": 44.9,
+    "floor_area_m2": 30.1,
+    "height_m": 6.42,
+    "furniture_count": 24,
+    "labels": {
+      "cabinet": 10,
+      "oven": 1,
+      "shelf": 2,
+      "table": 1,
+      "chair": 6,
+      "refrigerator": 1,
+      "tv_monitor": 2,
+      "sink": 1
+    },
+    "topdown": "results/preview/45261509_topdown.png",
+    "rgb": "data/3dod/Training/45261509/45261509_frames/lowres_wide/45261509_43539.756.png",
+    "frame_count": 606
+  },
+  {
+    "id": "45261569",
+    "vertices": 554702,
+    "mesh_mb": 22.2,
+    "floor_area_m2": 10.6,
+    "height_m": 5.28,
+    "furniture_count": 4,
+    "labels": {
+      "bed": 1,
+      "cabinet": 2,
+      "tv_monitor": 1
+    },
+    "topdown": "results/preview/45261569_topdown.png",
+    "rgb": "data/3dod/Training/45261569/45261569_frames/lowres_wide/45261569_76319.938.png",
+    "frame_count": 450
+  },
+  {
+    "id": "47204275",
+    "vertices": 588305,
+    "mesh_mb": 23.5,
+    "floor_area_m2": 19.4,
+    "height_m": 4.46,
+    "furniture_count": 4,
+    "labels": {
+      "toilet": 1,
+      "sink": 1,
+      "bathtub": 1,
+      "chair": 1
+    },
+    "topdown": "results/preview/47204275_topdown.png",
+    "rgb": "data/3dod/Training/47204275/47204275_frames/lowres_wide/47204275_12643.481.png",
+    "frame_count": 401
+  },
+  {
+    "id": "47331819",
+    "vertices": 215929,
+    "mesh_mb": 8.6,
+    "floor_area_m2": 6.6,
+    "height_m": 3.09,
+    "furniture_count": 6,
+    "labels": {
+      "washer": 1,
+      "cabinet": 3,
+      "sink": 1,
+      "toilet": 1
+    },
+    "topdown": "results/preview/47331819_topdown.png",
+    "rgb": "data/3dod/Training/47331819/47331819_frames/lowres_wide/47331819_228742.066.png",
+    "frame_count": 391
+  },
+  {
+    "id": "47332232",
+    "vertices": 358921,
+    "mesh_mb": 14.1,
+    "floor_area_m2": 16.4,
+    "height_m": 4.58,
+    "furniture_count": 8,
+    "labels": {
+      "washer": 1,
+      "cabinet": 3,
+      "sink": 1,
+      "bathtub": 1,
+      "shelf": 2
+    },
+    "topdown": "results/preview/47332232_topdown.png",
+    "rgb": "data/3dod/Training/47332232/47332232_frames/lowres_wide/47332232_755609.250.png",
+    "frame_count": 457
+  },
+  {
+    "id": "47332454",
+    "vertices": 550996,
+    "mesh_mb": 21.8,
+    "floor_area_m2": 9.0,
+    "height_m": 6.03,
+    "furniture_count": 10,
+    "labels": {
+      "table": 3,
+      "chair": 2,
+      "cabinet": 3,
+      "stool": 1,
+      "bed": 1
+    },
+    "topdown": "results/preview/47332454_topdown.png",
+    "rgb": "data/3dod/Training/47332454/47332454_frames/lowres_wide/47332454_883560.836.png",
+    "frame_count": 744
+  },
+  {
+    "id": "47332986",
+    "vertices": 393554,
+    "mesh_mb": 15.5,
+    "floor_area_m2": 19.4,
+    "height_m": 3.99,
+    "furniture_count": 5,
+    "labels": {
+      "toilet": 1,
+      "cabinet": 1,
+      "sink": 1,
+      "bathtub": 1,
+      "washer": 1
+    },
+    "topdown": "results/preview/47332986_topdown.png",
+    "rgb": "data/3dod/Training/47332986/47332986_frames/lowres_wide/47332986_124506.084.png",
+    "frame_count": 814
+  },
+  {
+    "id": "47333670",
+    "vertices": 959014,
+    "mesh_mb": 37.8,
+    "floor_area_m2": 21.8,
+    "height_m": 8.06,
+    "furniture_count": 13,
+    "labels": {
+      "bed": 1,
+      "cabinet": 6,
+      "shelf": 3,
+      "chair": 2,
+      "table": 1
+    },
+    "topdown": "results/preview/47333670_topdown.png",
+    "rgb": "data/3dod/Training/47333670/47333670_frames/lowres_wide/47333670_133980.972.png",
+    "frame_count": 963
+  },
+  {
+    "id": "47334655",
+    "vertices": 385404,
+    "mesh_mb": 15.1,
+    "floor_area_m2": 24.4,
+    "height_m": 3.01,
+    "furniture_count": 11,
+    "labels": {
+      "bathtub": 1,
+      "washer": 1,
+      "toilet": 1,
+      "cabinet": 5,
+      "sink": 1,
+      "shelf": 1,
+      "stool": 1
+    },
+    "topdown": "results/preview/47334655_topdown.png",
+    "rgb": "data/3dod/Training/47334655/47334655_frames/lowres_wide/47334655_389740.058.png",
+    "frame_count": 476
+  },
+  {
+    "id": "47334714",
+    "vertices": 807277,
+    "mesh_mb": 32.0,
+    "floor_area_m2": 21.8,
+    "height_m": 5.31,
+    "furniture_count": 7,
+    "labels": {
+      "sofa": 2,
+      "table": 1,
+      "chair": 1,
+      "cabinet": 3
+    },
+    "topdown": "results/preview/47334714_topdown.png",
+    "rgb": "data/3dod/Training/47334714/47334714_frames/lowres_wide/47334714_533681.598.png",
+    "frame_count": 585
+  },
+  {
+    "id": "47334957",
+    "vertices": 451159,
+    "mesh_mb": 18.1,
+    "floor_area_m2": 14.0,
+    "height_m": 5.19,
+    "furniture_count": 8,
+    "labels": {
+      "bed": 1,
+      "table": 4,
+      "tv_monitor": 1,
+      "shelf": 1,
+      "chair": 1
+    },
+    "topdown": "results/preview/47334957_topdown.png",
+    "rgb": "data/3dod/Training/47334957/47334957_frames/lowres_wide/47334957_667463.694.png",
+    "frame_count": 555
+  },
+  {
+    "id": "47430543",
+    "vertices": 380183,
+    "mesh_mb": 15.2,
+    "floor_area_m2": 11.9,
+    "height_m": 7.34,
+    "furniture_count": 8,
+    "labels": {
+      "bathtub": 1,
+      "toilet": 1,
+      "cabinet": 4,
+      "bed": 1,
+      "sink": 1
+    },
+    "topdown": "results/preview/47430543_topdown.png",
+    "rgb": "data/3dod/Training/47430543/47430543_frames/lowres_wide/47430543_300564.966.png",
+    "frame_count": 237
+  },
+  {
+    "id": "47669943",
+    "vertices": 1361062,
+    "mesh_mb": 54.8,
+    "floor_area_m2": 23.1,
+    "height_m": 5.36,
+    "furniture_count": 11,
+    "labels": {
+      "sofa": 2,
+      "fireplace": 1,
+      "cabinet": 1,
+      "tv_monitor": 1,
+      "table": 6
+    },
+    "topdown": "results/preview/47669943_topdown.png",
+    "rgb": "data/3dod/Training/47669943/47669943_frames/lowres_wide/47669943_15212.445.png",
+    "frame_count": 404
+  },
+  {
+    "id": "47895656",
+    "vertices": 365005,
+    "mesh_mb": 14.4,
+    "floor_area_m2": 7.0,
+    "height_m": 5.76,
+    "furniture_count": 9,
+    "labels": {
+      "cabinet": 3,
+      "table": 2,
+      "tv_monitor": 1,
+      "chair": 1,
+      "sofa": 1,
+      "shelf": 1
+    },
+    "topdown": "results/preview/47895656_topdown.png",
+    "rgb": "data/3dod/Training/47895656/47895656_frames/lowres_wide/47895656_368601.282.png",
+    "frame_count": 243
+  },
+  {
+    "id": "47895951",
+    "vertices": 265993,
+    "mesh_mb": 10.5,
+    "floor_area_m2": 14.9,
+    "height_m": 3.6,
+    "furniture_count": 4,
+    "labels": {
+      "bathtub": 1,
+      "toilet": 1,
+      "cabinet": 1,
+      "washer": 1
+    },
+    "topdown": "results/preview/47895951_topdown.png",
+    "rgb": "data/3dod/Training/47895951/47895951_frames/lowres_wide/47895951_405007.792.png",
+    "frame_count": 242
+  },
+  {
+    "id": "48018542",
+    "vertices": 477508,
+    "mesh_mb": 18.6,
+    "floor_area_m2": 19.6,
+    "height_m": 7.61,
+    "furniture_count": 5,
+    "labels": {
+      "washer": 1,
+      "cabinet": 1,
+      "sink": 1,
+      "toilet": 1,
+      "bed": 1
+    },
+    "topdown": "results/preview/48018542_topdown.png",
+    "rgb": "data/3dod/Training/48018542/48018542_frames/lowres_wide/48018542_829034.189.png",
+    "frame_count": 334
+  },
+  {
+    "id": "48458582",
+    "vertices": 435006,
+    "mesh_mb": 17.2,
+    "floor_area_m2": 7.4,
+    "height_m": 6.35,
+    "furniture_count": 3,
+    "labels": {
+      "toilet": 1,
+      "sink": 1,
+      "bathtub": 1
+    },
+    "topdown": "results/preview/48458582_topdown.png",
+    "rgb": "data/3dod/Training/48458582/48458582_frames/lowres_wide/48458582_1547.494.png",
+    "frame_count": 323
+  },
+  {
+    "id": "48458716",
+    "vertices": 254152,
+    "mesh_mb": 10.1,
+    "floor_area_m2": 12.3,
+    "height_m": 2.75,
+    "furniture_count": 9,
+    "labels": {
+      "sink": 1,
+      "bathtub": 1,
+      "toilet": 1,
+      "washer": 1,
+      "cabinet": 3,
+      "refrigerator": 1,
+      "dishwasher": 1
+    },
+    "topdown": "results/preview/48458716_topdown.png",
+    "rgb": "data/3dod/Training/48458716/48458716_frames/lowres_wide/48458716_137818.824.png",
+    "frame_count": 260
+  }
+]

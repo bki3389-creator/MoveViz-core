@@ -1,0 +1,7 @@
+-r requirements-core.txt
+open3d>=0.18,<1
+pygltflib>=1.16,<2
+scikit-learn>=1.5,<2
+torch>=2.4
+transformers>=4.45,<5
+usd-core>=24.8
