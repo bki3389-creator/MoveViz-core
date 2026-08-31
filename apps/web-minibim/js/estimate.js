@@ -1,7 +1,7 @@
 // estimate.js — 실측 수량 × 유형/재료 단가 → 견적. 표 렌더 + CSV + 인쇄.
 // RhinoBIM `bq`(물량 CSV)의 웹판: 모델을 바꾸면 즉시 재계산된다.
 
-import { state, metricsOf, wallsOf } from './state.js';
+import { state, emit, metricsOf, wallsOf } from './state.js';
 import { item, rateOf, KRW, CEIL_TYPES } from './catalog.js';
 
 const isWet = name => /욕실|화장실|발코니|베란다/.test(name || '');
@@ -14,7 +14,7 @@ export function buildEstimate() {
 
   for (const r of P.rooms) {
     const m = metricsOf(r);
-    const walls = wallsOf(r).filter(w => !w.inner);
+    const wallsAll = wallsOf(r);
     const push = (cat, id, qty, note = '') => {
       const it = item(id); if (!it || qty <= 0.001) return;
       const rate = rateOf(id, P.rates);
@@ -27,8 +27,8 @@ export function buildEstimate() {
     // 벽: 기본 마감 = 순면적 − 오버라이드 벽 면적, 오버라이드는 개별
     let overrideA = 0;
     for (const [wk, fid] of Object.entries(r.wallOverrides || {})) {
-      const w = walls.find(x => x.key === wk); if (!w) continue;
-      overrideA += w.netArea;
+      const w = wallsAll.find(x => x.key === wk); if (!w) continue;
+      if (!w.inner) overrideA += w.netArea;      // 내부벽은 기본 벽마감(둘레 기준)에 안 들어 있음
       push('벽(개별)', fid, w.netArea, '벽 ' + wk);
     }
     push('벽', r.wallFinish, Math.max(0, m.wallNet - overrideA));
@@ -38,7 +38,7 @@ export function buildEstimate() {
     if (ct && ct.rate !== 0) push('천장 유형', ct.id, ct.basis === 'perimeter' ? m.per : m.area);
     // 벽체 유형(신설/철거)
     for (const [wk, tid] of Object.entries(r.wallTypes || {})) {
-      const w = walls.find(x => x.key === wk); if (!w) continue;
+      const w = wallsAll.find(x => x.key === wk); if (!w) continue;
       push('벽체 유형', tid, w.netArea, '벽 ' + wk);
     }
     // 부자재 — 건식 실만
@@ -98,8 +98,7 @@ export function renderEstimate(elSummary, elTable) {
     inp.addEventListener('change', () => {
       const v = Number(String(inp.value).replace(/[^\d]/g, ''));
       if (!isNaN(v)) { state.project.rates[inp.dataset.id] = v; }
-      renderEstimate(elSummary, elTable);
-      import('./state.js').then(s => s.emit('rates'));
+      emit('rates');   // main 의 리스너가 견적만 재렌더 (3D 재구축 없음)
     });
   });
 }
@@ -117,7 +116,7 @@ export function exportCSV() {
              ['부가세', '', '', '', '', '', '', Math.round(vat)],
              ['총계', '', '', '', '', '', '', Math.round(total)],
              [], ['개략 실측 - 시공 발주 전 정밀실측 필요']);
-  const csv = '﻿' + lines.map(l => l.map(c => `"${String(c ?? '')}"`).join(',')).join('\r\n');
+  const csv = '\uFEFF' + lines.map(l => l.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = (state.project?.name || '미니빔') + '_견적.csv';

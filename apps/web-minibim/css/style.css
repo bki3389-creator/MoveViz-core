@@ -53,6 +53,7 @@ aside { background: var(--panel); overflow-y: auto; }
 .vtab.small { padding: 5px 10px; font-size: 11px; }
 .mini { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px; font-size: 11px; }
 .hint { font-size: 11px; color: var(--warn); }
+.tgroup { font-size: 10px; color: var(--sub); margin: 0 2px 0 6px; letter-spacing: .4px; }
 .chk { font-size: 11px; color: var(--sub); display: flex; gap: 4px; align-items: center; }
 #pane2d, #pane3d { flex: 1; position: relative; min-height: 0; }
 #cv2d { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -101,6 +102,12 @@ table.est tr.tot td { color: var(--accent); font-size: 12px; }
   #printArea .est-sum { background: #f2f2f2; }
   #printArea table.est th, #printArea table.est td { border-bottom: 1px solid #ccc; }
   #printArea .rate-in { border: none; color: #000; background: none; }
+  #printArea .pmeta { color: #555; font-size: 11px; margin-bottom: 10px; }
+  #printArea .proom { page-break-inside: avoid; margin-top: 14px; }
+  #printArea .proom h3 { margin-bottom: 4px; }
+  #printArea .proom h3 small { font-weight: 400; color: #555; margin-left: 8px; font-size: 11px; }
+  #printArea .proom img { width: 100%; max-height: 150mm; object-fit: contain; border: 1px solid #ddd; }
+  #printArea .pbreak { page-break-before: always; margin-bottom: 6px; }
 }
 
 /* 좁은 화면 */

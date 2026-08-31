@@ -93,9 +93,12 @@ const FURN_H = { bed: 0.5, sofa: 0.75, chair: 0.85, table: 0.72, cabinet: 1.2, r
 
 export function rebuild3D() {
   clearHighlight();
-  while (root.children.length) {
-    const c = root.children.pop();
-    c.traverse?.(o => { o.geometry?.dispose?.(); });
+  for (const c of [...root.children]) {
+    c.traverse?.(obj => {
+      obj.geometry?.dispose?.();
+      const m = obj.material;
+      (Array.isArray(m) ? m : m ? [m] : []).forEach(x => x.dispose?.());
+    });
     root.remove(c);
   }
   const P = state.project;
@@ -202,9 +205,9 @@ function buildRoom(r, g, allowRealLight) {
 
   // 가구 — 회전 OBB 박스
   if (state.showFurniture) {
-    for (const f of plan.furniture || []) {
+    (plan.furniture || []).forEach((f, fi) => {
       const cs = f.obb || f.polygon || [];
-      if (cs.length < 4) continue;
+      if (cs.length < 4) return;
       const wD = Math.hypot(cs[1][0] - cs[0][0], cs[1][1] - cs[0][1]);
       const dD = Math.hypot(cs[3][0] - cs[0][0], cs[3][1] - cs[0][1]);
       const cx = cs.reduce((a, p) => a + p[0], 0) / cs.length;
@@ -216,9 +219,9 @@ function buildRoom(r, g, allowRealLight) {
       m.position.set(cx, hF / 2, cz);
       m.rotation.y = -yaw;
       m.castShadow = true;
-      m.userData = { roomId: r.id, kind: 'furniture' };
+      m.userData = { roomId: r.id, kind: 'furniture', furnIdx: fi };
       g.add(m);
-    }
+    });
   }
 
   // 조명 — 픽스처 + (수 제한 내) 실제 광원
@@ -268,7 +271,7 @@ function pickAt(e) {
   const nd = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
   raycaster.setFromCamera(nd, camera);
-  return raycaster.intersectObjects(root.children, true).filter(h => h.object.userData?.kind);
+  return raycaster.intersectObjects(root.children, true).filter(h => h.object.visible && h.object.userData?.kind);
 }
 
 function onHover(e) {
@@ -316,8 +319,8 @@ function onClick(e) {
   hits.sort((a, b) => (order[a.object.userData.kind] ?? 9) - (order[b.object.userData.kind] ?? 9) || a.distance - b.distance);
   const h = hits[0], ud = h.object.userData;
   state.selRoom = ud.roomId;
-  state.sel = { kind: ud.kind === 'furniture' ? 'room' : ud.kind, roomId: ud.roomId,
-                wallKey: ud.wallKey, lightId: ud.lightId };
+  state.sel = { kind: ud.kind, roomId: ud.roomId,
+                wallKey: ud.wallKey, lightId: ud.lightId, furnIdx: ud.furnIdx };
   setHighlight(h.object);
   emit('select');
 }

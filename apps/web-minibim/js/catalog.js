@@ -66,3 +66,23 @@ const _byId = new Map(ALL_RATED.map(e => [e.id, e]));
 export function item(id) { return _byId.get(id); }
 export function rateOf(id, rates) { const o = rates && rates[id]; return (o === 0 || o) ? o : (item(id)?.rate ?? 0); }
 export const KRW = v => (v || 0).toLocaleString('ko-KR');
+
+// 가구 카탈로그 (배치용, m) — iOS FurnitureCatalog 축약판
+export const FURN_ITEMS = [
+  { name: '침대 Q', category: 'bed', w: 1.5, d: 2.0 },
+  { name: '침대 SS', category: 'bed', w: 1.1, d: 2.0 },
+  { name: '소파 3인', category: 'sofa', w: 2.0, d: 0.9 },
+  { name: '소파 2인', category: 'sofa', w: 1.5, d: 0.9 },
+  { name: '식탁 4인', category: 'table', w: 1.2, d: 0.8 },
+  { name: '식탁 6인', category: 'table', w: 1.8, d: 0.9 },
+  { name: '책상 1200', category: 'table', w: 1.2, d: 0.6 },
+  { name: '의자', category: 'chair', w: 0.45, d: 0.5 },
+  { name: '옷장 1200', category: 'cabinet', w: 1.2, d: 0.6 },
+  { name: '붙박이장 2400', category: 'cabinet', w: 2.4, d: 0.6 },
+  { name: 'TV장 1800', category: 'cabinet', w: 1.8, d: 0.4 },
+  { name: '냉장고', category: 'refrigerator', w: 0.9, d: 0.8 },
+  { name: '세탁기', category: 'appliance', w: 0.6, d: 0.65 },
+  { name: '변기', category: 'toilet', w: 0.4, d: 0.7 },
+  { name: '세면대', category: 'sink', w: 0.6, d: 0.45 },
+  { name: '욕조 1500', category: 'bathtub', w: 1.5, d: 0.75 },
+];
