@@ -57,12 +57,17 @@ final class RoomPlanSpikeManager: NSObject, ObservableObject {
     // #3 치수
     @Published var floorAreaM2: Double = 0
     @Published var wallLengths: [Double] = []   // 각 벽 길이(m)
+    @Published var ceilingM: Double = 0         // 천장고(m) = 벽 높이 중앙값 (PlanShot 도면·물량용)
+    @Published var lastSavedScanID: String?     // '내 스캔' 등록 id — 현장(프로젝트)에 방으로 귀속
 
     // 온디바이스 결과(평면도/표시용) — RoomPlan 모드 UI가 사용
     @Published var done = false
     @Published var walls2D: [[CGPoint]] = []     // 각 벽 [시작,끝] (XZ m)
     @Published var doors2D: [[CGPoint]] = []
     @Published var windows2D: [[CGPoint]] = []
+    @Published var floor2D: [CGPoint] = []       // iOS 17 floors[0].polygonCorners → 월드 XZ (비정형 방)
+    @Published var doorHeights: [Double] = []    // doors[i].dimensions.y (m)
+    @Published var windowHeights: [Double] = []
     @Published var planMin = CGPoint(x: 0, y: 0)
     @Published var planSize = CGPoint(x: 1, y: 1)
     @Published var furnitureList: [RoomFurniture] = []
@@ -141,9 +146,11 @@ final class RoomPlanSpikeManager: NSObject, ObservableObject {
         sampledFrames = 0; depthFrames = 0; meshFrames = 0; bothFrames = 0
         wallCount = 0; doorCount = 0; windowCount = 0; openingCount = 0; objectCount = 0
         objectsByCategory = [:]; floorAreaM2 = 0; wallLengths = []
+        ceilingM = 0; lastSavedScanID = nil
         meshVertices.removeAll()
         exportedJSON = ""; exportedUSDZ = ""; exportedPLY = ""; reportText = ""
         done = false; walls2D = []; doors2D = []; windows2D = []; furnitureList = []
+        floor2D = []; doorHeights = []; windowHeights = []
     }
 
     // MARK: - #1 동시 수집 측정 (비침습)
@@ -202,6 +209,7 @@ final class RoomPlanSpikeManager: NSObject, ObservableObject {
         // #3 치수 — 벽 길이(Surface.dimensions.x = 벽 폭), 바닥 면적
         wallLengths = room.walls.map { Double($0.dimensions.x) }
         floorAreaM2 = Self.estimateFloorArea(room)
+        ceilingM = Self.estimateCeiling(room)
 
         // 산출물 export
         exportAll(room)
@@ -232,6 +240,13 @@ final class RoomPlanSpikeManager: NSObject, ObservableObject {
         walls2D = segs(room.walls)
         doors2D = segs(room.doors)
         windows2D = segs(room.windows)
+        doorHeights = room.doors.map { Double($0.dimensions.y) }
+        windowHeights = room.windows.map { Double($0.dimensions.y) }
+        floor2D = Self.floorPolygon(room)
+        if floor2D.count >= 3 {
+            let a = PlanMetrics.polygonArea(floor2D.map { [Double($0.x), Double($0.y)] })
+            if a > 0.5 { floorAreaM2 = a }      // 바닥 폴리곤이 있으면 bbox 대신 실제 면적
+        }
         let all = (walls2D + doors2D + windows2D).flatMap { $0 }
         if let minx = all.map({ $0.x }).min(), let maxx = all.map({ $0.x }).max(),
            let minz = all.map({ $0.y }).min(), let maxz = all.map({ $0.y }).max() {
@@ -279,6 +294,27 @@ final class RoomPlanSpikeManager: NSObject, ObservableObject {
         return w * d
     }
 
+    /// iOS 17: floors[].polygonCorners(로컬 좌표) → Surface.transform 으로 월드 변환 → XZ 투영.
+    /// 폴리곤이 없으면(구 SDK·미인식) 빈 배열 → 호출자가 벽 bbox로 폴백.
+    static func floorPolygon(_ room: CapturedRoom) -> [CGPoint] {
+        guard let floor = room.floors.max(by: { $0.dimensions.x * $0.dimensions.z < $1.dimensions.x * $1.dimensions.z })
+        else { return [] }
+        let corners = floor.polygonCorners
+        guard corners.count >= 3 else { return [] }
+        return corners.map { c in
+            let w = floor.transform * SIMD4<Float>(c.x, c.y, c.z, 1)
+            return CGPoint(x: CGFloat(w.x), y: CGFloat(w.z))
+        }
+    }
+
+    /// 천장고(m) = 벽 Surface 높이(dimensions.y)의 중앙값. 벽이 없으면 0(미측정).
+    /// RoomPlan은 벽을 바닥~천장 전체 높이로 잡으므로 실측 천장고에 근접한다.
+    static func estimateCeiling(_ room: CapturedRoom) -> Double {
+        let hs = room.walls.map { Double($0.dimensions.y) }.filter { $0 > 1.5 && $0 < 5 }.sorted()
+        guard !hs.isEmpty else { return 0 }
+        return hs[hs.count / 2]
+    }
+
     // MARK: - Export (JSON / USDZ / PLY + 리포트)
 
     private func exportAll(_ room: CapturedRoom) {
@@ -315,7 +351,7 @@ final class RoomPlanSpikeManager: NSObject, ObservableObject {
 
         // (3.5) '내 스캔' 영구 등록 — 고정 파일명 export만으로는 다음 스캔이
         // 덮어써서 저장이 안 되는 것처럼 보였음.
-        ScanStore.shared.saveRoomPlan(
+        lastSavedScanID = ScanStore.shared.saveRoomPlan(
             usdz: docs.appendingPathComponent("roomplan_room.usdz"),
             roomJSON: docs.appendingPathComponent("roomplan_capturedroom.json"))
 
@@ -448,7 +484,13 @@ extension PlanData {
                     cx: Double(t.columns.3.x), cz: Double(t.columns.3.z),
                     w: Double(o.dimensions.x), d: Double(o.dimensions.z), yaw: yaw)
         }
+        let ceil = RoomPlanSpikeManager.estimateCeiling(room)
+        let fp = RoomPlanSpikeManager.floorPolygon(room)
         return PlanData.fromRoomPlan(walls: segs(room.walls), doors: segs(room.doors),
-                                     windows: segs(room.windows), furniture: furn)
+                                     windows: segs(room.windows), furniture: furn,
+                                     ceiling: ceil > 0 ? ceil : nil,
+                                     floorPolygon: fp.isEmpty ? nil : fp,
+                                     doorHeights: room.doors.map { Double($0.dimensions.y) },
+                                     windowHeights: room.windows.map { Double($0.dimensions.y) })
     }
 }

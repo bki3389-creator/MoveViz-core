@@ -1,6 +1,7 @@
 //  RootTabView.swift
-//  MoveViz — 앱 루트. LiDAR / 카메라(비-LiDAR) 탭으로 스캔 → 맥 전송 → 평면도 결과.
-//  (이사 견적 등 앞단 제거, 스캔→결과에 집중)
+//  PlanShot — 앱 루트. 현장(세대) → 방 스캔(RoomPlan 온디바이스) → 도면 PDF → 카톡.
+//  LiDAR→맥 / 카메라(비-LiDAR) / RoomPlan 스파이크 화면은 설정 > 실험 기능으로 이동
+//  (맥 서버 없이도 제품 흐름이 완결되도록 — 제안서 p8 "폰 단독").
 
 import SwiftUI
 import ARKit
@@ -11,15 +12,11 @@ struct RootTabView: View {
 
     var body: some View {
         TabView {
-            RoomPlanTabWrapper(up: uploader)
-                .tabItem { Label("즉석(RoomPlan)", systemImage: "square.split.bottomrightquarter.fill") }
-            LidarTab(up: uploader, store: store)
-                .tabItem { Label("LiDAR→맥", systemImage: "cube.transparent") }
-            CameraTabWrapper(up: uploader)
-                .tabItem { Label("카메라", systemImage: "camera") }
+            ProjectsView()
+                .tabItem { Label("현장", systemImage: "building.2") }
             SavedScansView(store: store, up: uploader)
                 .tabItem { Label("내 스캔", systemImage: "tray.full") }
-            SettingsTab(up: uploader)
+            SettingsTab(up: uploader, store: store)
                 .tabItem { Label("설정", systemImage: "gearshape") }
         }
         .sheet(isPresented: $uploader.present) {
@@ -160,14 +157,38 @@ struct CameraTabWrapper: View {
     }
 }
 
-// MARK: - 설정 탭 (맥 서버 주소)
+// MARK: - 설정 탭 (PlanShot 기본값 + 실험 기능 + 맥 서버)
 
 struct SettingsTab: View {
     @ObservedObject var up: ScanUploader
+    @ObservedObject var store: ScanStore
+    @AppStorage("planshot.company") private var company = ""
+    @AppStorage("planshot.noWatermark") private var noWatermark = false
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("맥 스토리지 서버") {
+                Section("PlanShot") {
+                    TextField("우리 업체명 (도면 타이틀블록 기본값)", text: $company)
+                    Toggle("워터마크 제거 (베타 파트너)", isOn: $noWatermark)
+                    Text("무료 체험은 PDF에 'PlanShot 무료 체험' 워터마크가 들어갑니다. 베타 파트너 업체는 끄세요.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("실험 기능 (맥 서버 필요)") {
+                    NavigationLink { LidarTab(up: up, store: store).navigationTitle("LiDAR 메시 → 맥") } label: {
+                        Label("LiDAR 메시 스캔 → 맥 평면도", systemImage: "cube.transparent")
+                    }
+                    NavigationLink { CameraTabWrapper(up: up).navigationTitle("카메라(비-LiDAR)") } label: {
+                        Label("카메라 전용(Object Capture) → 맥", systemImage: "camera")
+                    }
+                    NavigationLink { RoomPlanTabWrapper(up: up).navigationTitle("RoomPlan(맥 비교)") } label: {
+                        Label("RoomPlan 스캔 → 맥 비교", systemImage: "square.split.bottomrightquarter.fill")
+                    }
+                    NavigationLink { RoomPlanSpikeEntry().navigationTitle("RoomPlan 스파이크") } label: {
+                        Label("RoomPlan 스파이크 측정(3기준)", systemImage: "gauge.with.dots.needle.33percent")
+                    }
+                }
+                Section("맥 스토리지 서버 (실험 기능 전용)") {
                     TextField("http://맥IP:8080", text: $up.serverURL)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .keyboardType(.URL)
@@ -180,13 +201,8 @@ struct SettingsTab: View {
                         Text(up.testResult).font(.caption)
                             .foregroundStyle(up.testResult.hasPrefix("✅") ? .green : .orange)
                     }
-                    Text("맥에서 `python ingest_server.py` 실행 후, 같은 WiFi에서 맥 IP 입력. 먼저 '연결 테스트'로 확인.")
+                    Text("현장 흐름(현장 탭)은 맥 없이 폰에서 완결됩니다. 이 서버는 메시 경로 검증용.")
                         .font(.caption).foregroundStyle(.secondary)
-                }
-                Section("동작") {
-                    Label("LiDAR: 메시(OBJ) → 맥 평면도", systemImage: "cube")
-                    Label("카메라: 사진 → Object Capture → 맥 평면도", systemImage: "camera")
-                    Label("결과는 맥 scans/ 폴더에 저장", systemImage: "folder")
                 }
             }
             .navigationTitle("설정")

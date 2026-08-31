@@ -7,7 +7,7 @@
 import Foundation
 import CoreGraphics
 
-struct PlanData: Decodable {
+struct PlanData: Codable {
     let source: String?
     let floor_y: Double?
     let ceil_y: Double?
@@ -44,30 +44,32 @@ struct PlanData: Decodable {
     }
 }
 
-struct PlanWall: Decodable {
+struct PlanWall: Codable {
     let pos: Double?
     let segs: [[Double]]?                // [[lo,hi], ...]
     let presence: Double?
     let cls: String?                     // structure / built-in / noise
 }
 
-struct PlanOpening: Decodable {
+struct PlanOpening: Codable {
     let type: String?                    // door | window
     let wall_dir: String?                // "x": x=wall_pos 세로벽 / "z": z=wall_pos 가로벽
     let wall_pos: Double?
     let span: [Double]?                  // 벽 진행축상 [lo,hi]
     let width: Double?
     let center: [Double]?
+    let height: Double?                  // 개구부 높이(m) — RoomPlan dimensions.y. 없으면 표준값 가정
 }
 
-struct PlanRoom: Decodable {
+struct PlanRoom: Codable {
     let id: Int?
     let polygon: [[Double]]?
     let area_m2: Double?
     let center: [Double]?
+    let name: String?                    // 방 이름(침실1·거실…) — PlanShot 현장 흐름에서 채움
 }
 
-struct PlanFurniture: Decodable {
+struct PlanFurniture: Codable {
     let obb: [[Double]]?                 // 회전 반영 4코너 [[x,z] × 4]
     let polygon: [[Double]]?             // 지오메트리 경로 산출물 호환
     let category: String?
@@ -82,8 +84,10 @@ struct PlanFurniture: Decodable {
 
 extension PlanData {
     init(boundary: [[Double]]?, xw: [PlanWall]?, zw: [PlanWall]?,
-         openings: [PlanOpening]?, rooms: [PlanRoom]?, furniture: [PlanFurniture]?) {
-        self.init(source: "roomplan", floor_y: 0, ceil_y: 2.4, boundary: boundary,
+         openings: [PlanOpening]?, rooms: [PlanRoom]?, furniture: [PlanFurniture]?,
+         ceiling: Double? = nil) {
+        // 천장고: RoomPlan 벽 높이(중앙값)를 받는다. 없으면 2.4 가정.
+        self.init(source: "roomplan", floor_y: 0, ceil_y: ceiling ?? 2.4, boundary: boundary,
                   xw: xw, zw: zw, openings: openings, interior_openings: nil,
                   doors: nil, rooms: rooms, furniture: furniture,
                   furniture_vision: nil, furniture_geometry: nil)
@@ -95,7 +99,10 @@ extension PlanData {
     static func fromRoomPlan(
         walls: [[CGPoint]], doors: [[CGPoint]], windows: [[CGPoint]],
         furniture: [(cat: String, ko: String, cx: Double, cz: Double,
-                     w: Double, d: Double, yaw: Double)]
+                     w: Double, d: Double, yaw: Double)],
+        ceiling: Double? = nil, roomName: String? = nil,
+        floorPolygon: [CGPoint]? = nil,               // iOS 17 floors[].polygonCorners (월드 XZ)
+        doorHeights: [Double]? = nil, windowHeights: [Double]? = nil
     ) -> PlanData? {
         let wallSegs = walls.filter { $0.count == 2 }
         guard wallSegs.count >= 2 else { return nil }
@@ -136,8 +143,8 @@ extension PlanData {
         }
         guard minX < maxX, minZ < maxZ else { return nil }
 
-        func toOpenings(_ segs: [[CGPoint]], _ type: String) -> [PlanOpening] {
-            segs.filter { $0.count == 2 }.map { s in
+        func toOpenings(_ segs: [[CGPoint]], _ type: String, _ heights: [Double]?) -> [PlanOpening] {
+            segs.enumerated().filter { $0.element.count == 2 }.map { (i, s) in
                 let (a, b) = rotSeg(s)
                 let alongX = abs(b.x - a.x) >= abs(b.z - a.z)
                 let len = ((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z)).squareRoot()
@@ -147,7 +154,8 @@ extension PlanData {
                     wall_pos: alongX ? (a.z + b.z) / 2 : (a.x + b.x) / 2,
                     span: alongX ? [min(a.x, b.x), max(a.x, b.x)]
                                  : [min(a.z, b.z), max(a.z, b.z)],
-                    width: len, center: nil)
+                    width: len, center: nil,
+                    height: (heights != nil && i < heights!.count) ? heights![i] : nil)
             }
         }
 
@@ -165,11 +173,17 @@ extension PlanData {
                                       category_ko: f.ko, yaw_deg: yaw2, score: nil))
         }
 
-        let poly = [[minX, minZ], [maxX, minZ], [maxX, maxZ], [minX, maxZ]]
-        let rooms = [PlanRoom(id: 0, polygon: poly,
-                              area_m2: (maxX - minX) * (maxZ - minZ), center: nil)]
+        // 바닥 폴리곤: iOS 17 RoomPlan floors 폴리곤(L자·비정형 대응) 우선, 없으면 벽 바운딩 박스.
+        var poly = [[minX, minZ], [maxX, minZ], [maxX, maxZ], [minX, maxZ]]
+        var area = (maxX - minX) * (maxZ - minZ)
+        if let fp = floorPolygon, fp.count >= 3 {
+            let rp = fp.map { q -> [Double] in let r = rot(Double(q.x), Double(q.y)); return [r.x, r.z] }
+            let a = PlanMetrics.polygonArea(rp)
+            if a > 0.5 { poly = rp; area = a }
+        }
+        let rooms = [PlanRoom(id: 0, polygon: poly, area_m2: area, center: nil, name: roomName)]
         return PlanData(boundary: poly, xw: xw, zw: zw,
-                        openings: toOpenings(doors, "door") + toOpenings(windows, "window"),
-                        rooms: rooms, furniture: furn)
+                        openings: toOpenings(doors, "door", doorHeights) + toOpenings(windows, "window", windowHeights),
+                        rooms: rooms, furniture: furn, ceiling: ceiling)
     }
 }

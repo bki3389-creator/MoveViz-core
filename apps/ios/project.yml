@@ -29,6 +29,19 @@ targets:
       - path: App/QuoteEngine.swift
       - path: App/ScanStore.swift
       - path: App/SavedScansView.swift
+      - path: App/ProjectStore.swift
+      - path: App/PlanMetrics.swift
+      - path: App/PlanShot/ProjectsView.swift
+      - path: App/PlanShot/ProjectDetailView.swift
+      - path: App/PlanShot/RoomDetailView.swift
+      - path: App/PlanShot/RoomScanView.swift
+      - path: App/PlanShot/PlanPDFExporter.swift
+      - path: App/PlanShot/PSTheme.swift
+      - path: App/PlanShot/BOQEngine.swift
+      - path: App/PlanShot/BOQXLSXExporter.swift
+      - path: App/PlanShot/BOQView.swift
+      - path: App/PlanShot/DXFExporter.swift
+      - path: App/PlanShot/LayoutEditorView.swift
       - path: Modes/ModePickerView.swift
       - path: Modes/CameraOnlyScanView.swift
       - path: ScanManager.swift

@@ -1,0 +1,114 @@
+/* PlanShot 미니BIM — 다크 스튜디오 테마 (iOS PSTheme 과 동일 계열: 시안 강조) */
+:root {
+  --bg: #0e1116; --panel: #161b22; --card: #1d2430; --line: #2a3240;
+  --ink: #e6e3db; --sub: #8b94a3; --accent: #219ed9; --accent2: #2ec4a6;
+  --warn: #e9c46a; --danger: #d9534f;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 13px/1.5 -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif; overflow: hidden; }
+
+#topbar { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 12px;
+  background: var(--panel); border-bottom: 1px solid var(--line); }
+.brand { font-weight: 800; font-size: 16px; letter-spacing: .2px; }
+.brand span { color: var(--accent); }
+.brand em { font-style: normal; font-size: 11px; color: var(--sub); margin-left: 4px; }
+#projName { background: var(--card); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 8px; padding: 6px 10px; width: 220px; }
+.spacer { flex: 1; }
+.btn { border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+.btn:hover { border-color: var(--accent); }
+.btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.ghost { background: transparent; }
+.btn.danger { background: rgba(217,83,79,.15); border-color: var(--danger); color: #f0a09e; width: 100%; margin-top: 8px; }
+
+#layout { display: grid; grid-template-columns: 240px 1fr 320px; height: calc(100% - 48px); }
+aside { background: var(--panel); overflow-y: auto; }
+#left { border-right: 1px solid var(--line); }
+#right { border-left: 1px solid var(--line); padding-bottom: 30px; }
+.panel-title { font-size: 11px; font-weight: 700; color: var(--sub); text-transform: uppercase;
+  letter-spacing: .6px; padding: 12px 12px 6px; }
+
+/* 방 카드 */
+.room-card { position: relative; margin: 4px 8px; padding: 10px 12px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.room-card.on { border-color: var(--accent); background: rgba(33,158,217,.10); }
+.rc-top { display: flex; justify-content: space-between; align-items: baseline; }
+.rc-top span { font-size: 11px; color: var(--sub); }
+.rc-sub { font-size: 11px; color: var(--sub); margin-top: 2px; }
+.rc-del { position: absolute; top: 6px; right: 8px; background: none; border: none; color: var(--sub);
+  cursor: pointer; font-size: 14px; display: none; }
+.room-card:hover .rc-del { display: block; }
+.empty { color: var(--sub); text-align: center; padding: 24px 10px; font-size: 12px; }
+.tip { font-size: 11px; color: var(--sub); background: var(--card); border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
+
+/* 중앙 */
+#center { display: flex; flex-direction: column; min-width: 0; }
+#viewTabs { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--panel);
+  border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.vtab { border: 1px solid var(--line); background: var(--card); color: var(--sub); padding: 6px 14px;
+  border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; }
+.vtab.on { color: #fff; background: rgba(33,158,217,.2); border-color: var(--accent); }
+.vtab.small { padding: 5px 10px; font-size: 11px; }
+.mini { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px; font-size: 11px; }
+.hint { font-size: 11px; color: var(--warn); }
+.chk { font-size: 11px; color: var(--sub); display: flex; gap: 4px; align-items: center; }
+#pane2d, #pane3d { flex: 1; position: relative; min-height: 0; }
+#cv2d { position: absolute; inset: 0; width: 100%; height: 100%; }
+#view3d { position: absolute; inset: 0; }
+#view3d canvas { display: block; }
+
+/* 인스펙터 */
+#inspector { padding: 4px 12px 10px; }
+.insp-head { padding: 8px 10px; background: var(--card); border-radius: 10px; margin-bottom: 8px; }
+.insp-head b { display: block; }
+.insp-head span { font-size: 11px; color: var(--sub); }
+.fld { display: block; margin-bottom: 8px; }
+.fld span { display: block; font-size: 11px; color: var(--sub); margin-bottom: 3px; }
+.fld select, .fld input { width: 100%; background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font-size: 12px; }
+.fld select:focus, .fld input:focus { outline: none; border-color: var(--accent); }
+
+/* 견적 */
+#estSummary { padding: 0 12px; }
+.est-sum { background: var(--card); border-radius: 10px; padding: 10px 12px; }
+.est-sum > div { display: flex; justify-content: space-between; padding: 2px 0; font-size: 12px; }
+.est-sum .tot { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; font-size: 14px; }
+.est-sum .tot b { color: var(--accent); }
+.est-sum .disc { font-size: 10px; color: var(--sub); display: block; margin-top: 4px; }
+#estDetail { padding: 8px 12px; }
+#estDetail summary { cursor: pointer; font-size: 11px; color: var(--sub); margin-bottom: 6px; }
+table.est { width: 100%; border-collapse: collapse; font-size: 11px; }
+table.est th, table.est td { padding: 4px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+table.est th { color: var(--sub); font-weight: 600; font-size: 10px; }
+table.est td.r, table.est th.r { text-align: right; font-variant-numeric: tabular-nums; }
+table.est td.dim { color: var(--sub); }
+table.est tr.sum td { font-weight: 700; border-top: 1px solid var(--line); }
+table.est tr.tot td { color: var(--accent); font-size: 12px; }
+.rate-in { width: 70px; background: transparent; border: 1px solid transparent; color: var(--warn);
+  text-align: right; border-radius: 5px; font-size: 11px; }
+.rate-in:hover, .rate-in:focus { border-color: var(--line); background: var(--card); outline: none; }
+.disc { font-size: 10px; color: var(--sub); }
+
+/* 인쇄 — 견적만 흰 종이에 */
+#printArea { display: none; }
+@media print {
+  body > *:not(#printArea) { display: none !important; }
+  body { background: #fff; color: #000; overflow: visible; }
+  #printArea { display: block; padding: 20mm 15mm; }
+  #printArea h2 { margin-bottom: 8px; }
+  #printArea .est-sum { background: #f2f2f2; }
+  #printArea table.est th, #printArea table.est td { border-bottom: 1px solid #ccc; }
+  #printArea .rate-in { border: none; color: #000; background: none; }
+}
+
+/* 좁은 화면 */
+@media (max-width: 1100px) {
+  #layout { grid-template-columns: 200px 1fr 280px; }
+}
+@media (max-width: 860px) {
+  #layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; height: auto; }
+  body { overflow: auto; }
+  #center { height: 60vh; }
+}

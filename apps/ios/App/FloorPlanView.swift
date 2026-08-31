@@ -7,8 +7,25 @@
 
 import SwiftUI
 
+/// 도면 시트 정보 — 타이틀블록·방 이름·천장고·워터마크. nil이면 예전처럼 순수 뷰어.
+struct PlanSheetInfo {
+    var roomName: String? = nil
+    var projectName: String = ""
+    var company: String = ""
+    var client: String = ""
+    var address: String = ""
+    var date: Date = Date()
+    var ceilingM: Double? = nil
+    var corrected: Bool = false          // 레이저 보정 적용 여부 표기
+    var watermark: String? = nil         // 무료 체험 워터마크 문구
+    var showTitleBlock: Bool = true
+    static let disclaimer = "개략 실측 — 시공 발주 전 정밀실측 필요"
+}
+
 struct FloorPlanView: View {
     let plan: PlanData
+    var sheet: PlanSheetInfo? = nil      // PlanShot 도면 모드(타이틀블록 등). 기본 nil = 뷰어
+    var interactive: Bool = true         // PDF 렌더 시 false (제스처 상태 없음)
 
     @State private var zoom: CGFloat = 1
     @State private var pan: CGSize = .zero
@@ -45,10 +62,11 @@ struct FloorPlanView: View {
             Canvas { ctx, size in
                 guard let b = plan.bounds else { return }
                 let margin: CGFloat = 52          // 치수선 자리 확보
+                let titleH: CGFloat = (sheet?.showTitleBlock ?? false) ? 92 : 0   // 타이틀블록 높이
                 let s = min((size.width - margin * 2) / b.width,
-                            (size.height - margin * 2) / b.height) * effZoom
+                            (size.height - margin * 2 - titleH) / b.height) * effZoom
                 let ox = (size.width - b.width * s) / 2 - b.minX * s + effPan.width
-                let oy = (size.height - b.height * s) / 2 - b.minY * s + effPan.height
+                let oy = (size.height - titleH - b.height * s) / 2 - b.minY * s + effPan.height
                 func T(_ x: Double, _ z: Double) -> CGPoint {
                     CGPoint(x: CGFloat(x) * s + ox, y: CGFloat(z) * s + oy)
                 }
@@ -82,6 +100,33 @@ struct FloorPlanView: View {
                 for room in plan.rooms ?? [] {
                     guard let poly = room.polygon, poly.count >= 3 else { continue }
                     ctx.fill(path(of: poly), with: .color(Color(.systemFill).opacity(0.35)))
+                }
+
+                // 1b) 방 이름 + 실별 내측 치수 (건축 도면: 실명 아래 "가로 × 세로")
+                //     이름은 plan.rooms[].name 우선, 방 1개짜리 RoomPlan 스캔은 sheet.roomName.
+                let roomsArr = plan.rooms ?? []
+                for room in roomsArr {
+                    guard let poly = room.polygon, poly.count >= 3 else { continue }
+                    let name = room.name ?? (roomsArr.count == 1 ? sheet?.roomName : nil)
+                    let xs = poly.map { $0[0] }, zs = poly.map { $0[1] }
+                    guard let x0 = xs.min(), let x1 = xs.max(),
+                          let z0 = zs.min(), let z1 = zs.max() else { continue }
+                    let c = T((x0 + x1) / 2, (z0 + z1) / 2)
+                    let pxW = CGFloat(x1 - x0) * s, pxH = CGFloat(z1 - z0) * s
+                    guard min(pxW, pxH) > 40 else { continue }
+                    var ty = c.y - 6
+                    if let name, !name.isEmpty {
+                        ctx.draw(Text(name).font(.system(size: max(9, min(14, 0.22 * s)), weight: .semibold))
+                                    .foregroundColor(ink),
+                                 at: CGPoint(x: c.x, y: ty))
+                        ty += max(10, min(15, 0.24 * s))
+                    }
+                    if pxW > 70 {
+                        ctx.draw(Text("\(mm(x1 - x0)) × \(mm(z1 - z0))")
+                                    .font(.system(size: max(7, min(10, 0.16 * s))).monospacedDigit())
+                                    .foregroundColor(ink.opacity(0.7)),
+                                 at: CGPoint(x: c.x, y: ty))
+                    }
                 }
 
                 // 2) 외곽 경계 벽 밴드
@@ -318,18 +363,82 @@ struct FloorPlanView: View {
                     }
                 }
 
-                // 면적 + 축척바 (좌하단 고정)
-                let area = (plan.rooms ?? []).compactMap { $0.area_m2 }.reduce(0, +)
-                let sb = CGPoint(x: 16, y: size.height - 16)
+                // 면적(㎡·평) + 천장고 + 축척바 (좌하단, 타이틀블록 위)
+                var area = (plan.rooms ?? []).compactMap { $0.area_m2 }.reduce(0, +)
+                if area == 0, let bd = plan.boundary { area = PlanMetrics.polygonArea(bd) }
+                let sb = CGPoint(x: 16, y: size.height - 16 - titleH)
                 var bar = Path(); bar.move(to: sb); bar.addLine(to: CGPoint(x: sb.x + s, y: sb.y))
                 ctx.stroke(bar, with: .color(.secondary), style: StrokeStyle(lineWidth: 2))
                 ctx.draw(Text("1 m").font(.caption2).foregroundColor(.secondary),
                          at: CGPoint(x: sb.x + s / 2, y: sb.y - 9))
                 if area > 0 {
-                    ctx.draw(Text(String(format: "%.1f ㎡", area))
+                    let py = PlanUnits.pyeong(area)
+                    ctx.draw(Text(String(format: "%.1f ㎡ · %.1f평", area, py))
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(ink),
-                             at: CGPoint(x: sb.x + s + 44, y: sb.y - 2))
+                             at: CGPoint(x: sb.x + s + 8, y: sb.y - 2), anchor: .leading)
+                }
+                let chM = sheet?.ceilingM ?? ((plan.ceil_y ?? 0) - (plan.floor_y ?? 0))
+                if chM > 1.8 {
+                    ctx.draw(Text("CH \(mm(chM))")
+                                .font(.system(size: 10, weight: .medium).monospacedDigit())
+                                .foregroundColor(ink.opacity(0.8)),
+                             at: CGPoint(x: sb.x, y: sb.y - 24), anchor: .leading)
+                }
+
+                // ── 타이틀블록(하단 표) + 푸터 면책 문구 — PlanShot 도면 모드 ──
+                if let sh = sheet, sh.showTitleBlock {
+                    let top = size.height - titleH + 6
+                    var rule = Path()
+                    rule.move(to: CGPoint(x: 12, y: top)); rule.addLine(to: CGPoint(x: size.width - 12, y: top))
+                    ctx.stroke(rule, with: .color(ink.opacity(0.6)), style: StrokeStyle(lineWidth: 1))
+                    let df = DateFormatter(); df.dateFormat = "yyyy.MM.dd"
+                    let small = Font.system(size: 9)
+                    let bold = Font.system(size: 10, weight: .semibold)
+                    // 좌열: 현장/실명/고객/주소
+                    var y = top + 12
+                    let leftX: CGFloat = 14
+                    func row(_ k: String, _ v: String) {
+                        guard !v.isEmpty else { return }
+                        ctx.draw(Text(k).font(small).foregroundColor(ink.opacity(0.55)),
+                                 at: CGPoint(x: leftX, y: y), anchor: .leading)
+                        ctx.draw(Text(v).font(bold).foregroundColor(ink),
+                                 at: CGPoint(x: leftX + 34, y: y), anchor: .leading)
+                        y += 13
+                    }
+                    row("현장", sh.projectName)
+                    row("실명", sh.roomName ?? "")
+                    row("고객", sh.client)
+                    row("주소", sh.address)
+                    // 우열: 업체/일자/축척/보정
+                    var y2 = top + 12
+                    let rightX = size.width - 14
+                    func rrow(_ v: String, _ f: Font = Font.system(size: 9), _ op: Double = 0.8) {
+                        guard !v.isEmpty else { return }
+                        ctx.draw(Text(v).font(f).foregroundColor(ink.opacity(op)),
+                                 at: CGPoint(x: rightX, y: y2), anchor: .trailing)
+                        y2 += 13
+                    }
+                    rrow(sh.company, bold, 1)
+                    rrow("실측일 " + df.string(from: sh.date))
+                    rrow("iPhone LiDAR 실측 · 축척 NTS")
+                    rrow(sh.corrected ? "레이저 보정 적용" : "레이저 보정 없음",
+                         Font.system(size: 9, weight: .medium), sh.corrected ? 1 : 0.6)
+                    // 푸터 면책 — 제안서 p11 "상시 표기"
+                    ctx.draw(Text(PlanSheetInfo.disclaimer)
+                                .font(.system(size: 8.5, weight: .medium))
+                                .foregroundColor(Color.orange),
+                             at: CGPoint(x: size.width / 2, y: size.height - 8))
+                }
+
+                // 워터마크(무료 체험) — 대각선 반투명
+                if let wm = sheet?.watermark, !wm.isEmpty {
+                    var wctx = ctx
+                    wctx.translateBy(x: size.width / 2, y: (size.height - titleH) / 2)
+                    wctx.rotate(by: .degrees(-30))
+                    wctx.draw(Text(wm).font(.system(size: max(28, size.width / 9), weight: .heavy))
+                                .foregroundColor(ink.opacity(0.10)),
+                              at: .zero)
                 }
             }
             .contentShape(Rectangle())
@@ -345,6 +454,7 @@ struct FloorPlanView: View {
                 )
             )
             .onTapGesture(count: 2) { withAnimation { zoom = 1; pan = .zero } }
+            .allowsHitTesting(interactive)   // PDF/레이아웃 편집기에서는 제스처 비활성
         }
         .background(Color(.systemBackground))
     }

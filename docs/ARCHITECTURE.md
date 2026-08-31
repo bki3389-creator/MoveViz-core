@@ -11,6 +11,13 @@
    representative models, or USDZ conversion.
 5. The React app renders the mesh and derived floor-plan JSON.
 
+## On-device product path (PlanShot, 2026-08)
+
+RoomPlan (iOS 17, LiDAR) → `PlanData.fromRoomPlan` (floor polygon, wall heights,
+opening heights) → `FloorPlanView` drawing sheet → `PlanPDFExporter` / `BOQEngine` +
+`BOQXLSXExporter` / `DXFExporter`. No server involved. See docs/PLANSHOT.md.
+The mesh pipeline below remains the desktop/validation path.
+
 ## Core service
 
 The active web API is services/floorplan/server_furniture_v5.py. Its structural

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlanShot 미니BIM — 실측 → 3D → 견적</title>
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">Plan<span>Shot</span> <em>미니BIM</em></div>
+  <input id="projName" placeholder="현장명" />
+  <div class="spacer"></div>
+  <button id="btnNew" class="btn ghost">새 현장</button>
+  <button id="btnSample" class="btn ghost">샘플 열기</button>
+  <button id="btnOpen" class="btn ghost">JSON 열기</button>
+  <input type="file" id="fileIn" accept=".json" multiple hidden>
+  <button id="btnSave" class="btn ghost">프로젝트 저장</button>
+  <button id="btnCSV" class="btn accent">견적 CSV</button>
+  <button id="btnPrint" class="btn accent">인쇄</button>
+</header>
+
+<div id="layout">
+  <aside id="left">
+    <div class="panel-title">방 (실측)</div>
+    <div id="roomList"></div>
+    <div class="tip" style="margin:8px">
+      iPhone PlanShot 앱에서 스캔 → 내 스캔의 <b>plan.json</b> 을 공유/에어드롭으로 받아 이 창에 드래그하면 방이 추가됩니다.
+      프로젝트 JSON을 열면 전체가 복원됩니다.
+    </div>
+  </aside>
+
+  <main id="center">
+    <div id="viewTabs">
+      <button id="tab2d" class="vtab">2D 실측 도면</button>
+      <button id="tab3d" class="vtab">3D 스튜디오</button>
+      <div class="spacer"></div>
+      <button id="modeSelect" class="vtab small on" title="클릭으로 바닥/벽/천장/조명 선택">선택</button>
+      <button id="modeLight" class="vtab small" title="천장 클릭으로 조명 설치">조명 배치</button>
+      <select id="lightType" class="mini"></select>
+      <span id="lightHint" class="hint"></span>
+      <label class="chk"><input type="checkbox" id="chkCeil"> 천장</label>
+      <label class="chk"><input type="checkbox" id="chkFurn" checked> 가구</label>
+      <button id="btnFrame" class="vtab small" title="전체 보기">⤢</button>
+    </div>
+    <div id="pane2d"><canvas id="cv2d"></canvas></div>
+    <div id="pane3d"><div id="view3d"></div></div>
+  </main>
+
+  <aside id="right">
+    <div class="panel-title">선택 · 유형/재료</div>
+    <div id="inspector"></div>
+    <div class="panel-title">견적 (실시간)</div>
+    <div id="estSummary"></div>
+    <details id="estDetail" open>
+      <summary>상세 내역</summary>
+      <div id="estTable"></div>
+    </details>
+  </aside>
+</div>
+
+<div id="printArea"></div>
+<script type="module" src="./js/main.js"></script>
+<script>
+  // 인쇄: 견적 표를 인쇄 영역으로 복사
+  window.addEventListener('beforeprint', () => {
+    const pa = document.getElementById('printArea');
+    const name = document.getElementById('projName').value || '현장';
+    pa.innerHTML = '<h2>' + name + ' — 개략 견적</h2>'
+      + document.getElementById('estSummary').innerHTML
+      + document.getElementById('estTable').innerHTML
+      + '<p class="disc">개략 실측(iPhone LiDAR) — 시공 발주 전 정밀실측 필요 · PlanShot 미니BIM</p>';
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+# PlanShot 미니BIM (웹) — 실측 → 3D 스튜디오 → 견적
+
+폰(PlanShot iOS)이 만든 실측 평면(`plan.json`)을 **웹에서** 열어, 3D로 클릭하면서
+벽·바닥·천장에 유형/재료를 지정하고 조명을 설치하고, 즉시 개략 견적을 뽑는 도구.
+RhinoBIM의 "부재 = 유형 + 파라미터 → 물량" 개념의 웹판. 서버·빌드 불필요(정적 파일).
+
+## 실행
+
+```bash
+cd apps/web-minibim
+py -3 -m http.server 8899        # (mac: python3 -m http.server 8899)
+# → http://localhost:8899
+```
+
+ES 모듈이라 `file://` 직접 열기는 안 됨 — 반드시 http로. three.js는 `vendor/`에 내장(오프라인 OK).
+
+## 사용 흐름
+
+1. **샘플 열기** 또는 iPhone 앱 '내 스캔'의 `plan.json` 을 창에 **드래그** (여러 개 = 여러 방)
+2. **2D 실측 도면** 탭 — 벽 밴드·문/창·치수·가구·조명 확인, 방/벽 클릭 선택
+3. **3D 스튜디오** 탭 — 궤도 회전 / 클릭으로 바닥·벽·천장·조명 선택
+   - 우측 패널에서 **바닥/벽/천장 마감**, **천장 유형**(평천장·우물·간접등박스·노출), **벽체 유형**(가벽 신설·철거) 지정 → 3D 색·형상 즉시 반영
+   - **조명 배치** 모드: 천장 클릭 = 다운라이트/매입등/펜던트, 두 번 클릭 = T5 라인/마그네틱 (실제 광원으로 분위기 확인, Del = 삭제)
+4. 우측 **견적**: 실측 수량 × 단가 실시간 합계 — 단가는 표에서 바로 수정(저장됨)
+5. 헤더: **프로젝트 저장**(JSON) / **견적 CSV** / **인쇄**(견적서만 흰 종이로)
+
+## 수량 산출 기준
+
+- 바닥·천장 = 방 폴리곤 면적, 벽 = 둘레×천장고 − 개구부(문/창 실측 폭×높이)
+- 벽별 개별 마감 지정 시 기본 마감 수량에서 그 벽 순면적 공제
+- 걸레받이 = 둘레−문폭, 몰딩 = 둘레 (욕실/발코니 이름이면 제외)
+- 단가는 ⚠️ 참고값 — 반드시 회사 단가로 수정. 프로젝트 JSON에 함께 저장됨
+
+## 파일
+
+`js/catalog.js` 유형·재료·조명 카탈로그 / `js/state.js` 모델+지오메트리 파생 /
+`js/plan2d.js` 2D 캔버스 / `js/scene3d.js` three.js 씬·선택·조명 / `js/estimate.js` 견적 /
+`js/main.js` UI 배선. 로직 검증: `node scratchpad/test_minibim.mjs` (벽 매칭·수량 검산 통과)
+
+## 관련
+
+- 원조 "mini BIM": [MoveMate-client](https://github.com/bki3389-creator/MoveMate-client) (아키톤 1등 원본, Next.js) —
+  `FloorPlanEditor.jsx`(벽 그리기/트림/문·창 도구), `placement`(GLB 가구 배치+AI 배치), `FloorPlan3D`(TransformControls).
+  백엔드(localhost:8000)+Gemini 키 필요. 이 미니BIM은 그 개념을 **서버 없이** PlanShot 실측 JSON에 직결한 경량판이며,
+  다음 단계에서 FloorPlanEditor의 벽 편집 도구와 placement의 GLB 가구를 이식할 것.

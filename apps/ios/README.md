@@ -1,6 +1,12 @@
-# MoveViz iOS
+# PlanShot iOS (구 MoveViz)
 
-iPhone으로 공간을 스캔해서 3D 모델과 평면도를 만들고, 이사 견적까지 이어지는 iOS 앱.
+iPhone LiDAR로 방을 스캔해 **현장(세대) 단위 치수 도면·물량 산출(공내역)·PDF/xlsx/DXF**를 폰에서 바로 만드는 앱.
+인테리어 실측·수주 도구 — 상세는 [`docs/PLANSHOT.md`](../../docs/PLANSHOT.md). (이전 이사 견적·맥 서버 경로는 설정 > 실험 기능에 남아 있음)
+
+## PlanShot 현장 흐름 (맥 불필요, iOS 17 + LiDAR)
+
+현장 탭 → 새 현장 → **방 스캔 추가**(RoomPlan 2~3분) → 방 이름 → 도면 확인(평수·CH·문/창·타이틀블록)
+→ 레이저 보정 / 배치안(탑뷰 레이아웃) → **도면 PDF · 공내역 · xlsx · DXF** → 카카오톡 공유
 
 ## 주요 기능
 
@@ -19,6 +25,9 @@ ScanManager.swift       AR 세션 + 포인트 축적 + 커버리지 로직
 ARScanView.swift        ARView의 SwiftUI 래퍼
 ScanningView.swift      메인 스캔 화면 UI
 App/                    탭 루트, 뷰어, 견적, 저장/업로드 등 화면
+App/ProjectStore.swift  현장·방·보정·배치안 모델 (Documents/projects.json)
+App/PlanMetrics.swift   실 지표(면적·둘레·벽 순면적) + 보정 적용
+App/PlanShot/           현장 목록/상세, 방 스캔, 방 상세, 레이아웃 편집기, 공내역, PDF/xlsx/DXF, 테마
 Modes/                  스캔 모드 선택 (카메라 전용 모드 포함)
 RoomPlanSpike/          RoomPlan API 실험 (키프레임 녹화, 포토그래메트리)
 floorplan/              PLY → 평면도 추출 Python 파이프라인
