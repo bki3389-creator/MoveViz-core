@@ -113,14 +113,12 @@ function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 function setTab(t) {
   $('pane2d').style.display = t === '2d' ? '' : 'none';
   $('pane3d').style.display = t === '3d' ? '' : 'none';
-  $('tab2d').classList.toggle('on', t === '2d');
-  $('tab3d').classList.toggle('on', t === '3d');
+  $('modeChip').innerHTML = t === '2d' ? '2D 도면 <span>F3=3D</span>' : '3D <span>F2=도면</span>';
   state.activeTab = t;
   if (t === '2d') render2d();
   syncToolbar();
 }
-$('tab2d').onclick = () => setTab('2d');
-$('tab3d').onclick = () => setTab('3d');
+$('modeChip').onclick = () => setTab(state.activeTab === '2d' ? '3d' : '2d');   // 펑션키가 주 경로, 클릭은 보조
 
 // 2D 편집 도구
 const TOOLS2D = [['t2Select', 'select'], ['t2Door', 'door'], ['t2Window', 'window'], ['t2Wall', 'wall'], ['t2Split', 'split']];

@@ -8,6 +8,26 @@ import { natureEquirect } from './scene3d.js';
 
 let running = false, stopFlag = false;
 
+/// 자연 배경을 패스트레이서가 읽는 DataTexture(Float RGBA)로 변환 — CanvasTexture는
+/// EquirectHdrInfoUniform이 image.data를 요구해 크래시한다(자연 배경 도입 후 렌더 실패 원인).
+let natureDataTex = null;
+function natureEnvData() {
+  if (natureDataTex) return natureDataTex;
+  const cnv = natureEquirect(1024).image;
+  const w = cnv.width, h = cnv.height;
+  const src = cnv.getContext('2d').getImageData(0, 0, w, h).data;
+  const data = new Float32Array(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    for (let k = 0; k < 3; k++) data[i * 4 + k] = Math.pow(src[i * 4 + k] / 255, 2.2);  // sRGB→linear
+    data[i * 4 + 3] = 1;
+  }
+  const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.FloatType);
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  t.needsUpdate = true;
+  natureDataTex = t;
+  return t;
+}
+
 export function isRendering() { return running; }
 export function stopRender() { stopFlag = true; }
 /// 강제 종료 — 느린 샘플/걸린 컴파일로 안 멈출 때 상태를 리셋(다음 렌더 즉시 가능)
@@ -44,7 +64,7 @@ export async function renderShot(root, camera, canvas, {
   renderer.toneMappingExposure = 1.1;
 
   // 방 지오메트리만 복제한 전용 씬 — GridHelper 등 헬퍼(LineSegments)는 패스트레이서가 못 다룸
-  const envTex = natureEquirect(1024);   // env는 중형 — 품질/CDF 비용 균형
+  const envTex = natureEnvData();   // Float DataTexture — 패스트레이서 호환
   const scene = new THREE.Scene();
   scene.background = envTex;
   scene.environment = envTex;
