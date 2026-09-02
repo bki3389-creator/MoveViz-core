@@ -154,7 +154,7 @@ function onWalkMouse(e) {
 }
 function onWalkKey(e) {
   if (!walk) return;
-  if (e.code === 'Escape') { exitWalk(); return; }
+  if (e.code === 'Escape' || e.code === 'F4') { e.preventDefault(); exitWalk(); return; }
   walk.keys[e.code] = true;
   e.stopPropagation();   // 걷는 동안 전역 단축키(W=가벽 등) 차단
 }
@@ -330,16 +330,46 @@ const FM = {
   wood: 0x9a7b52, woodDark: 0x7a5f3e, fabric: 0x93a7b1, fabricDark: 0x7b8f99,
   white: 0xf2f2ef, metal: 0xdadee2, dark: 0x3a3f45, glass: 0x9fc4dd, bedding: 0xdfe6e2,
 };
+/// 가구 파트 재질 — 렌더샷(패스트레이서)에서 실제처럼: 목재는 결 텍스처, 금속은 반사,
+/// 도기(백색 저러프)는 유광, 패브릭은 고러프. FM 색으로 역할 판별.
+let furnWoodCv = null;
+function furnMat(color, rough) {
+  if (color === FM.wood || color === FM.woodDark) {
+    if (!furnWoodCv) {   // 나뭇결 캔버스 1회 생성
+      const c = document.createElement('canvas'); c.width = c.height = 256;
+      const g3 = c.getContext('2d');
+      g3.fillStyle = '#9a7b52'; g3.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 46; i++) {
+        g3.strokeStyle = `rgba(${70 + (i % 5) * 14},${52 + (i % 5) * 10},${30 + (i % 5) * 7},0.35)`;
+        g3.lineWidth = 1 + (i % 3);
+        g3.beginPath(); g3.moveTo(0, i * 6 + (i % 7));
+        g3.bezierCurveTo(80, i * 6 - 4, 170, i * 6 + 5, 256, i * 6);
+        g3.stroke();
+      }
+      furnWoodCv = c;
+    }
+    const tex = new THREE.CanvasTexture(furnWoodCv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    const dark = color === FM.woodDark;
+    return new THREE.MeshStandardMaterial({ color: dark ? 0x8a6a45 : 0xb69771, map: tex, roughness: 0.62 });
+  }
+  if (color === FM.metal) return new THREE.MeshStandardMaterial({ color, metalness: 0.78, roughness: 0.34 });
+  if (color === FM.glass) return new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.45, roughness: 0.1 });
+  if (color === FM.white && rough <= 0.4) return new THREE.MeshStandardMaterial({ color: 0xf6f6f3, roughness: 0.12 });  // 도기
+  if (color === FM.fabric || color === FM.fabricDark || color === FM.bedding) {
+    return new THREE.MeshStandardMaterial({ color, roughness: 0.97 });
+  }
+  return new THREE.MeshStandardMaterial({ color, roughness: rough });
+}
+
 function fpart(g2, w, h, d, color, x, y, z, rough = 0.85) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ color, roughness: rough }));
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), furnMat(color, rough));
   m.position.set(x, y, z);
   g2.add(m);
   return m;
 }
 function fcyl(g2, r1, h, color, x, y, z, rotZ90 = false) {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r1, h, 18),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.7 }));
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r1, h, 18), furnMat(color, 0.7));
   if (rotZ90) m.rotation.x = Math.PI / 2;
   m.position.set(x, y, z);
   g2.add(m);
@@ -416,13 +446,13 @@ function buildFurniture(cat, w, d) {
       break;
     }
     case 'sink': case 'washbasin': case 'basin': {
-      fpart(g2, w * 0.3, 0.62, d * 0.35, FM.white, 0, 0.31, 0, 0.3);
-      fpart(g2, w, 0.13, d, FM.white, 0, 0.72, 0, 0.25);
+      fpart(g2, w * 0.3, 0.62, d * 0.35, FM.white, 0, 0.31, 0, 0.3, 0.15);
+      fpart(g2, w, 0.13, d, FM.white, 0, 0.72, 0, 0.25, 0.15);
       fpart(g2, 0.03, 0.14, 0.03, FM.metal, 0, 0.86, -d * 0.2);          // 수전
       break;
     }
     case 'bathtub': case 'tub': {
-      fpart(g2, w, 0.55, d, FM.white, 0, 0.275, 0, 0.3);
+      fpart(g2, w, 0.55, d, FM.white, 0, 0.275, 0, 0.3, 0.15);
       fpart(g2, w * 0.84, 0.04, d * 0.78, 0xdcebf2, 0, 0.54, 0, 0.15);   // 수면 느낌
       break;
     }
@@ -485,6 +515,53 @@ function inPoly3(x, z, poly) {
   return c;
 }
 
+/// 직교 다각형 안쪽 오프셋 — 연속 중복점 제거 후 각 변을 안쪽 법선으로 d 이동, 이웃 변 교차점이 새 꼭짓점.
+/// 사선/퇴화면 null (호출부는 벽별 박스 폴백). 반환 {outer, inner}
+export function insetRectPoly(bdIn, dIn) {
+  const pts = [];
+  for (let i = 0; i < bdIn.length; i++) {
+    const a = bdIn[i], b = bdIn[(i + 1) % bdIn.length];
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-6) pts.push(a);
+  }
+  const N = pts.length;
+  if (N < 4) return null;
+  const eg = [];
+  for (let i = 0; i < N; i++) {
+    const a = pts[i], b = pts[(i + 1) % N];
+    const dx = Math.abs(b[0] - a[0]), dz = Math.abs(b[1] - a[1]);
+    if (dx > 1e-6 && dz > 1e-6) return null;   // 사선 변 — 지원 안 함
+    const horiz = dx >= dz;
+    const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const inw = horiz ? (inPoly3(mid[0], mid[1] + 0.04, bdIn) ? 1 : -1)
+                      : (inPoly3(mid[0] + 0.04, mid[1], bdIn) ? 1 : -1);
+    eg.push({ horiz, c: (horiz ? a[1] : a[0]) + inw * dIn });
+  }
+  const inner = [];
+  for (let i = 0; i < N; i++) {
+    const eA = eg[(i - 1 + N) % N], eB = eg[i];   // 꼭짓점 i = 이전 변 × 현재 변
+    if (eA.horiz === eB.horiz) return null;
+    inner.push(eA.horiz ? [eB.c, eA.c] : [eA.c, eB.c]);
+  }
+  // 안쪽 폭이 뒤집힐 정도로 작은 방이면 실패 처리
+  let area2 = 0;
+  for (let i = 0; i < N; i++) {
+    const a = inner[i], b = inner[(i + 1) % N];
+    area2 += a[0] * b[1] - b[0] * a[1];
+  }
+  if (Math.abs(area2) < 0.05) return null;
+  return { outer: pts, inner };
+}
+
+/// 바깥/안 다각형 사이 링을 아래 방향 depth 로 압출 (y=0 기준 아래로)
+function ringExtrude(outer, inner, depth) {
+  if (!outer || !inner) return null;
+  const shape = new THREE.Shape(outer.map(pt => new THREE.Vector2(pt[0], pt[1])));
+  shape.holes.push(new THREE.Path(inner.slice().reverse().map(pt => new THREE.Vector2(pt[0], pt[1]))));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+  geo.rotateX(Math.PI / 2);   // (x,y) 평면 → (x,z), 압출 +z → 아래(-y)
+  return geo;
+}
+
 function buildRoom(r, g, allowRealLight) {
   const plan = r.plan, H = ceilH(plan);
   const bd = plan.boundary || [];
@@ -526,36 +603,44 @@ function buildRoom(r, g, allowRealLight) {
     }
   }
 
-  // 천장 유형 프로파일 — 우물(둘레 단내림) / 간접등 박스(둘레 박스+발광 슬롯)
+  // 천장 유형 프로파일 — 둘레 링(코너 마이터) 압출: 우물 단내림 / 간접등 박스 + 연속 발광 슬롯
   if (r.ceilingType === 'ct_indirect' || r.ceilingType === 'ct_well') {
     const isWell = r.ceilingType === 'ct_well';
     const bandW = isWell ? 0.35 : 0.30, bandH = isWell ? 0.12 : 0.18;
-    for (const w of wallsOf(r).filter(w2 => !w2.inner)) {
-      const mid = (w.lo + w.hi) / 2;
-      // 방 안쪽 방향(법선) — 밴드가 벽 안쪽 면에 붙도록
-      const inw = w.dir === 'z'
-        ? (inPoly3(mid, w.pos + 0.08, bd) ? 1 : -1)
-        : (inPoly3(w.pos + 0.08, mid, bd) ? 1 : -1);
-      const cx = w.dir === 'z' ? mid : w.pos + inw * bandW / 2;
-      const cz = w.dir === 'z' ? w.pos + inw * bandW / 2 : mid;
-      const band = new THREE.Mesh(new THREE.BoxGeometry(
-        w.dir === 'z' ? w.len : bandW, bandH, w.dir === 'z' ? bandW : w.len),
-        colorMat(0xefe9dd, 0.95));
-      band.position.set(cx, H - bandH / 2, cz);
-      band.visible = state.showCeiling;
-      band.userData = { roomId: r.id, kind: 'ceiling', isCeil: true };
-      g.add(band);
-      if (!isWell) {   // 간접등 슬롯: 박스 안쪽 모서리 발광 스트립
-        const glow = new THREE.Mesh(new THREE.BoxGeometry(
-          w.dir === 'z' ? w.len - 0.1 : 0.03, 0.02, w.dir === 'z' ? 0.03 : w.len - 0.1),
-          new THREE.MeshStandardMaterial({ color: 0xfff3d8, emissive: 0xffe9be, emissiveIntensity: 1.2 }));
-        glow.position.set(
-          w.dir === 'z' ? mid : w.pos + inw * (bandW + 0.02),
-          H - bandH + 0.02,
-          w.dir === 'z' ? w.pos + inw * (bandW + 0.02) : mid);
-        glow.visible = state.showCeiling;
-        glow.userData = { roomId: r.id, kind: 'ceiling', isCeil: true };
-        g.add(glow);
+    const ip = insetRectPoly(bd, bandW);
+    const addCeil = (mesh) => {
+      mesh.visible = state.showCeiling;
+      mesh.userData = { roomId: r.id, kind: 'ceiling', isCeil: true };
+      g.add(mesh);
+    };
+    if (ip) {
+      const band = new THREE.Mesh(ringExtrude(ip.outer, ip.inner, bandH), colorMat(0xefe9dd, 0.95));
+      band.position.y = H;
+      addCeil(band);
+      // 밴드 하단면 마감(압출 옆면만으론 아래에서 얇게 보임 방지) — 링 자체가 솔리드라 불필요
+      if (!isWell) {   // 간접등: 밴드 안쪽 모서리를 따라 끊김 없는 발광 링
+        const ig = insetRectPoly(bd, bandW + 0.035);
+        if (ig) {
+          const glow = new THREE.Mesh(ringExtrude(ip.inner, ig.inner, 0.02),
+            new THREE.MeshStandardMaterial({ color: 0xfff3d8, emissive: 0xffe9be, emissiveIntensity: 1.2 }));
+          glow.position.y = H - bandH + 0.03;
+          addCeil(glow);
+        }
+      }
+    } else {
+      // 폴백(사선/초소형 방): 벽별 박스 — 코너는 겹침 허용
+      for (const w of wallsOf(r).filter(w2 => !w2.inner)) {
+        if (w.len < 0.05) continue;
+        const mid = (w.lo + w.hi) / 2;
+        const inw = w.dir === 'z'
+          ? (inPoly3(mid, w.pos + 0.08, bd) ? 1 : -1)
+          : (inPoly3(w.pos + 0.08, mid, bd) ? 1 : -1);
+        const band = new THREE.Mesh(new THREE.BoxGeometry(
+          w.dir === 'z' ? w.len : bandW, bandH, w.dir === 'z' ? bandW : w.len),
+          colorMat(0xefe9dd, 0.95));
+        band.position.set(w.dir === 'z' ? mid : w.pos + inw * bandW / 2, H - bandH / 2,
+                          w.dir === 'z' ? w.pos + inw * bandW / 2 : mid);
+        addCeil(band);
       }
     }
   }

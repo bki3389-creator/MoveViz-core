@@ -240,6 +240,7 @@ document.addEventListener('keydown', e => {
   if (isWalking()) return;   // 걷기 중 — 이동 키는 씬이 처리, Esc는 자체 종료
   if (e.key === 'F2') { e.preventDefault(); setTab('2d'); return; }
   if (e.key === 'F3') { e.preventDefault(); setTab('3d'); return; }
+  if (e.key === 'F4') { e.preventDefault(); $('btnWalk').click(); return; }   // 걷기 토글
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === 'z') {
     e.preventDefault(); clearHighlight(); undo(); return;
