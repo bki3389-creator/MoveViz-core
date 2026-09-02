@@ -196,6 +196,8 @@ function wallCanvas(finishId, baseColor) {
     wl_mural: { size: 2.4, kind: 'mural', stretchY: true },
     wl_silk:  { size: 1.06, kind: 'weave' },
     wl_paper: { size: 1.06, kind: 'weave' },
+    cl_silk:  { size: 1.06, kind: 'weave' },
+    cl_paper: { size: 1.06, kind: 'weave' },
     wl_film:  { size: 1.2, kind: 'wood', plank: 0.3 },
   }[finishId];
   if (!SPEC) { wallCvCache.set(ck, null); return null; }
@@ -589,7 +591,8 @@ function buildRoom(r, g, allowRealLight) {
 
   // 천장
   const ceilGeo = floorGeo.clone();
-  const ceil = new THREE.Mesh(ceilGeo, colorMat(finishColorOf(r, 'ceil') ?? finishColor(r.ceilFinish, 0xf2efe9), 0.95));
+  const ceilCol = finishColorOf(r, 'ceil') ?? finishColor(r.ceilFinish, 0xf2efe9);
+  const ceil = new THREE.Mesh(ceilGeo, wallMat(r.ceilFinish, ceilCol, 4, 4));
   ceil.material.side = THREE.DoubleSide;
   ceil.material.transparent = true;
   ceil.material.opacity = 0.92;
@@ -767,7 +770,7 @@ function buildRoom(r, g, allowRealLight) {
         // 문짝 — 여닫이: 25° 열림 / 미닫이: 패널 2장 겹침. 유리문은 반투명 재질.
         const leafMat = () => op2.dm === 'glass'
           ? new THREE.MeshStandardMaterial({ color: 0xbfd9e8, transparent: true, opacity: 0.42, roughness: 0.12 })
-          : colorMat(0xc7b299, 0.7);
+          : furnMat(FM.wood, 0.6);   // 목문 = 나뭇결
         if (op2.dk === 'slide') {
           const nx0 = w.dir === 'z' ? 0 : 1, nz0 = w.dir === 'z' ? 1 : 0;
           const pw = op2.w * 0.55;

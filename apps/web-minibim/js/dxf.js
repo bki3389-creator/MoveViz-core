@@ -1,6 +1,7 @@
-// dxf.js — 현재 프로젝트 → DXF R12 다운로드. **2D 화면과 동일한 도면 문법**:
-// 벽 이중선(개구부 컷·코너 연장), 문 스윙(방 안쪽), 창 3선+잼, 실명/면적(한글은 \U+XXXX
-// 유니코드 이스케이프 — AutoCAD 2004+ 정상 표시), 붙은 변 치수 생략. 단위 mm.
+// dxf.js — 현재 프로젝트 → DXF R12 다운로드. 2D 화면과 동일한 도면 문법 + **삶것 실무 레이어 체계**
+// (Y:2404 한남다원 티하우스 발행본에서 복원: 벽=A-CON(구조)+A-FIN(마감) — A-WALL 안 씀,
+//  치수 1-Dim_axis(축)/1-Dim_axis-in(내부), 문자 2-Tx_SIZE <출력mm>, 실명 1-SYM_room,
+//  가구 A-FUR, 문 A-DOOR-plan, 창 A-WIN-sec, 조명 A-ETC, 서체 DOTUM=HDOTUM.TTF). 단위 mm.
 
 import { state, layoutOffsets, wallsOf, wallCuts, metricsOf, bboxOf, doorGeom } from './state.js';
 import { item } from './catalog.js';
@@ -82,7 +83,7 @@ export function buildDXFString() {
     // ── 벽: 2D와 동일 — 개구부 컷 + 코너 연장 + 이중선(±tb/2 오프셋 2줄)
     for (const w of wallsOf(r)) {
       const tb = w.inner ? 0.10 : (w.isExterior ? 0.20 : 0.15), halfM = tb / 2;
-      const WL = (!w.inner && w.isExterior) ? 'S-WALL' : 'A-WALL';   // 골조/마감 레이어 분리
+      const WL = (!w.inner && w.isExterior) ? 'A-CON' : 'A-FIN';   // 골조/마감 레이어 분리
       const cutsAll = wallCuts(w);
       const sharedAt = t2 => (w.shared || []).some(sp => t2 > sp.lo - 0.02 && t2 < sp.hi + 0.02);
       const pieces = [];
@@ -112,11 +113,11 @@ export function buildDXFString() {
         if (o.foreign) continue;
         if (o.type === 'window') {
           for (const k of [-halfM, 0, halfM]) {
-            if (w.dir === 'z') line(X(o.lo), Y(w.pos + k), X(o.hi), Y(w.pos + k), 'A-GLAZ');
-            else line(X(w.pos + k), Y(o.lo), X(w.pos + k), Y(o.hi), 'A-GLAZ');
+            if (w.dir === 'z') line(X(o.lo), Y(w.pos + k), X(o.hi), Y(w.pos + k), 'A-WIN-sec');
+            else line(X(w.pos + k), Y(o.lo), X(w.pos + k), Y(o.hi), 'A-WIN-sec');
           }
         } else {
-          const dl = o.dm === 'glass' ? 'A-GLAZ' : 'A-DOOR';   // 유리문은 창호 레이어
+          const dl = o.dm === 'glass' ? 'A-WIN-sec' : 'A-DOOR-plan';   // 유리문은 창호 레이어
           if (o.dk === 'slide') {
             // 미닫이: 패널 2장(겹침) — 호 없음
             const pw2 = o.w * 0.55, noff = 0.035;
@@ -144,41 +145,41 @@ export function buildDXFString() {
 
     // ── 실명 + 면적/평/CH + 재료 (한글 \U+ 이스케이프)
     const cX = X((bb.minX + bb.maxX) / 2), cY = Y((bb.minZ + bb.maxZ) / 2);
-    text(cX, cY + 0.22, 0.16, r.name, 'A-ANNO-TEXT');
-    text(cX, cY - 0.02, 0.10, `${m.area.toFixed(2)}m2 (${m.pyeong.toFixed(1)}평) CH ${Math.round(m.H * 1000)}`, 'A-AREA');
+    text(cX, cY + 0.22, 0.16, r.name, '1-SYM_room');
+    text(cX, cY - 0.02, 0.10, `${m.area.toFixed(2)}m2 (${m.pyeong.toFixed(1)}평) CH ${Math.round(m.H * 1000)}`, '2-Tx_SIZE 1.5');
     text(cX, cY - 0.22, 0.09,
-         `${item(r.floorFinish)?.name ?? ''}·${item(r.wallFinish)?.name ?? ''}`, 'A-AREA');
+         `${item(r.floorFinish)?.name ?? ''}·${item(r.wallFinish)?.name ?? ''}`, '2-Tx_SIZE 1.5');
 
     // ── 가구 + 라벨
     for (const f of r.plan.furniture || []) {
       if (f.status === 'dispose') continue;   // 폐기 — 최종 도면에서 제외
       const cs = f.obb || f.polygon || [];
       if (cs.length < 3) continue;
-      poly(cs.map(p => [X(p[0]), Y(p[1])]), 'A-FURN', true);
+      poly(cs.map(p => [X(p[0]), Y(p[1])]), 'A-FUR', true);
       const fx = cs.reduce((a2, p) => a2 + p[0], 0) / cs.length;
       const fz = cs.reduce((a2, p) => a2 + p[1], 0) / cs.length;
-      if (f.category_ko) text(X(fx), Y(fz), 0.08, f.category_ko, 'A-FURN');
+      if (f.category_ko) text(X(fx), Y(fz), 0.08, f.category_ko, 'A-FUR');
     }
 
     // ── 조명
     for (const l of r.lights || []) {
-      if (l.x2 != null) line(X(l.x), Y(l.z), X(l.x2), Y(l.z2), 'E-LITE');
+      if (l.x2 != null) line(X(l.x), Y(l.z), X(l.x2), Y(l.z2), 'A-ETC');
       else {
-        arc(X(l.x), Y(l.z), 0.06, 0, 360, 'E-LITE');
-        line(X(l.x) - 0.08, Y(l.z), X(l.x) + 0.08, Y(l.z), 'E-LITE');
-        line(X(l.x), Y(l.z) - 0.08, X(l.x), Y(l.z) + 0.08, 'E-LITE');
+        arc(X(l.x), Y(l.z), 0.06, 0, 360, 'A-ETC');
+        line(X(l.x) - 0.08, Y(l.z), X(l.x) + 0.08, Y(l.z), 'A-ETC');
+        line(X(l.x), Y(l.z) - 0.08, X(l.x), Y(l.z) + 0.08, 'A-ETC');
       }
     }
 
     // ── 치수: 모든 외곽 변 전장 + 개구부 위치 체인(방 안쪽) — 인테리어 실시도면 문법
     const adj = adjOf(r);
-    const dim = (x1, y1, x2, y2, out, label, o2 = 0.55, h2 = 0.11) => {
+    const dim = (x1, y1, x2, y2, out, label, o2 = 0.55, h2 = 0.11, DL = '1-Dim_axis') => {
       const A = [x1 + out[0] * o2, y1 + out[1] * o2], B = [x2 + out[0] * o2, y2 + out[1] * o2];
-      line(x1 + out[0] * 0.06, y1 + out[1] * 0.06, A[0] + out[0] * 0.08, A[1] + out[1] * 0.08, 'A-ANNO-DIMS');
-      line(x2 + out[0] * 0.06, y2 + out[1] * 0.06, B[0] + out[0] * 0.08, B[1] + out[1] * 0.08, 'A-ANNO-DIMS');
-      line(A[0], A[1], B[0], B[1], 'A-ANNO-DIMS');
-      for (const p2 of [A, B]) line(p2[0] - 0.05, p2[1] - 0.05, p2[0] + 0.05, p2[1] + 0.05, 'A-ANNO-DIMS');
-      text((A[0] + B[0]) / 2 + out[0] * 0.14, (A[1] + B[1]) / 2 + out[1] * 0.14, h2, label, 'A-ANNO-DIMS', 1);
+      line(x1 + out[0] * 0.06, y1 + out[1] * 0.06, A[0] + out[0] * 0.08, A[1] + out[1] * 0.08, DL);
+      line(x2 + out[0] * 0.06, y2 + out[1] * 0.06, B[0] + out[0] * 0.08, B[1] + out[1] * 0.08, DL);
+      line(A[0], A[1], B[0], B[1], DL);
+      for (const p2 of [A, B]) line(p2[0] - 0.05, p2[1] - 0.05, p2[0] + 0.05, p2[1] + 0.05, DL);
+      text((A[0] + B[0]) / 2 + out[0] * 0.14, (A[1] + B[1]) / 2 + out[1] * 0.14, h2, label, DL, 1);
     };
     const mm = v => Math.round(v * 1000).toLocaleString('en-US');
     for (const w of wallsOf(r)) {
@@ -202,8 +203,8 @@ export function buildDXFString() {
         for (let i2 = 0; i2 + 1 < st2.length; i2++) {
           const A2 = st2[i2], B2 = st2[i2 + 1];
           if (B2 - A2 < 0.08) continue;
-          if (w.dir === 'z') dim(X(A2), Y(w.pos), X(B2), Y(w.pos), inD, mm(B2 - A2), 0.38, 0.085);
-          else dim(X(w.pos), Y(A2), X(w.pos), Y(B2), inD, mm(B2 - A2), 0.38, 0.085);
+          if (w.dir === 'z') dim(X(A2), Y(w.pos), X(B2), Y(w.pos), inD, mm(B2 - A2), 0.38, 0.085, '1-Dim_axis-in');
+          else dim(X(w.pos), Y(A2), X(w.pos), Y(B2), inD, mm(B2 - A2), 0.38, 0.085, '1-Dim_axis-in');
         }
       }
     }
@@ -231,59 +232,59 @@ export function buildDXFString() {
       const finT = FLOOR_FIN[r.floorFinish] ?? 0.012;
       // 바닥: 구조 슬래브 + 마감층
       poly([[ox - EXT_T, oy - finT - SLAB], [ox + W + EXT_T, oy - finT - SLAB],
-            [ox + W + EXT_T, oy - finT], [ox - EXT_T, oy - finT]], 'S-SLAB', true);
-      line(ox, oy, ox + W, oy, 'A-SECT');                                  // 바닥 마감면
-      line(ox, oy - finT, ox + W, oy - finT, 'A-SECT');                    // 마감층 하단
+            [ox + W + EXT_T, oy - finT], [ox - EXT_T, oy - finT]], 'A-CON', true);
+      line(ox, oy, ox + W, oy, 'A-FIN');                                  // 바닥 마감면
+      line(ox, oy - finT, ox + W, oy - finT, 'A-FIN');                    // 마감층 하단
       // 좌우 벽 골조 + 마감선
       for (const [wx0, sgn2] of [[ox - EXT_T, 1], [ox + W, -1]]) {
-        poly([[wx0, oy - finT], [wx0 + EXT_T, oy - finT], [wx0 + EXT_T, oy + H + 0.1], [wx0, oy + H + 0.1]], 'S-WALL', true);
+        poly([[wx0, oy - finT], [wx0 + EXT_T, oy - finT], [wx0 + EXT_T, oy + H + 0.1], [wx0, oy + H + 0.1]], 'A-CON', true);
         const fx2 = sgn2 > 0 ? wx0 + EXT_T + 0.012 : wx0 - 0.012;
-        line(fx2, oy, fx2, oy + H, 'A-SECT');                              // 벽 마감선(도배/타일)
+        line(fx2, oy, fx2, oy + H, 'A-FIN');                              // 벽 마감선(도배/타일)
       }
       // 상부 슬래브
       poly([[ox - EXT_T, oy + H + 0.1], [ox + W + EXT_T, oy + H + 0.1],
-            [ox + W + EXT_T, oy + H + 0.1 + SLAB], [ox - EXT_T, oy + H + 0.1 + SLAB]], 'S-SLAB', true);
+            [ox + W + EXT_T, oy + H + 0.1 + SLAB], [ox - EXT_T, oy + H + 0.1 + SLAB]], 'A-CON', true);
       // 천장 유형별 프로파일
       const ct2 = r.ceilingType;
       if (ct2 === 'ct_well' && W > 1.4) {
         const bnd = 0.35, drop = 0.12;
-        line(ox, oy + H, ox + bnd, oy + H, 'A-SECT');
-        line(ox + W - bnd, oy + H, ox + W, oy + H, 'A-SECT');
-        line(ox + bnd, oy + H, ox + bnd, oy + H + drop, 'A-SECT');
-        line(ox + W - bnd, oy + H, ox + W - bnd, oy + H + drop, 'A-SECT');
-        line(ox + bnd, oy + H + drop, ox + W - bnd, oy + H + drop, 'A-SECT');
+        line(ox, oy + H, ox + bnd, oy + H, 'A-FIN');
+        line(ox + W - bnd, oy + H, ox + W, oy + H, 'A-FIN');
+        line(ox + bnd, oy + H, ox + bnd, oy + H + drop, 'A-FIN');
+        line(ox + W - bnd, oy + H, ox + W - bnd, oy + H + drop, 'A-FIN');
+        line(ox + bnd, oy + H + drop, ox + W - bnd, oy + H + drop, 'A-FIN');
       } else if (ct2 === 'ct_indirect' && W > 1.0) {
         for (const bx of [ox, ox + W - 0.3]) {
-          poly([[bx, oy + H - 0.15], [bx + 0.3, oy + H - 0.15], [bx + 0.3, oy + H], [bx, oy + H]], 'A-SECT', true);
+          poly([[bx, oy + H - 0.15], [bx + 0.3, oy + H - 0.15], [bx + 0.3, oy + H], [bx, oy + H]], 'A-FIN', true);
         }
-        line(ox + 0.3, oy + H, ox + W - 0.3, oy + H, 'A-SECT');
+        line(ox + 0.3, oy + H, ox + W - 0.3, oy + H, 'A-FIN');
       } else {
-        line(ox, oy + H, ox + W, oy + H, 'A-SECT');                        // 평천장 마감선
+        line(ox, oy + H, ox + W, oy + H, 'A-FIN');                        // 평천장 마감선
       }
       // 치수(CH·폭) + 라벨
-      line(ox - EXT_T - 0.45, oy, ox - EXT_T - 0.45, oy + H, 'A-ANNO-DIMS');
-      line(ox - EXT_T - 0.55, oy, ox - EXT_T - 0.35, oy, 'A-ANNO-DIMS');
-      line(ox - EXT_T - 0.55, oy + H, ox - EXT_T - 0.35, oy + H, 'A-ANNO-DIMS');
-      text(ox - EXT_T - 0.6, oy + H / 2, 0.11, `CH ${Math.round(H * 1000)}`, 'A-ANNO-DIMS');
-      text(ox + W / 2, oy + H + 0.55, 0.14, `${r.name} 단면`, 'A-ANNO-TEXT');
+      line(ox - EXT_T - 0.45, oy, ox - EXT_T - 0.45, oy + H, '1-Dim_axis-in');
+      line(ox - EXT_T - 0.55, oy, ox - EXT_T - 0.35, oy, '1-Dim_axis-in');
+      line(ox - EXT_T - 0.55, oy + H, ox - EXT_T - 0.35, oy + H, '1-Dim_axis-in');
+      text(ox - EXT_T - 0.6, oy + H / 2, 0.11, `CH ${Math.round(H * 1000)}`, '1-Dim_axis-in');
+      text(ox + W / 2, oy + H + 0.55, 0.14, `${r.name} 단면`, '2-Tx_SIZE 2.5');
       text(ox + W / 2, oy + 0.25, 0.09,
            `바닥 ${item(r.floorFinish)?.name ?? ''} / 벽 ${item(r.wallFinish)?.name ?? ''} / 천장 ${item(r.ceilFinish)?.name ?? ''}`,
-           'A-SECT');
+           'A-FIN');
       EXT(ox - EXT_T - 0.7, oy - finT - SLAB - 0.2);
       secX += W + EXT_T * 2 + 1.2;
     }
     // 벽-바닥 접합 상세 (4배 확대, 참조용)
     {
       const k = 4, dx0 = secX + 0.8, dy0 = secBaseY - 1.2;
-      poly([[dx0, dy0], [dx0 + 0.9 * k, dy0], [dx0 + 0.9 * k, dy0 + 0.04 * k], [dx0, dy0 + 0.04 * k]], 'S-SLAB', true);   // 슬래브 상단부
-      line(dx0 + 0.15 * k, dy0 + 0.04 * k, dx0 + 0.9 * k, dy0 + 0.04 * k, 'A-SECT');                                        // 바닥 마감
-      line(dx0 + 0.15 * k, dy0 + 0.052 * k, dx0 + 0.9 * k, dy0 + 0.052 * k, 'A-SECT');
-      poly([[dx0, dy0 + 0.04 * k], [dx0 + 0.15 * k, dy0 + 0.04 * k], [dx0 + 0.15 * k, dy0 + 0.6 * k], [dx0, dy0 + 0.6 * k]], 'S-WALL', true);  // 벽
-      line(dx0 + 0.15 * k + 0.01 * k, dy0 + 0.052 * k, dx0 + 0.15 * k + 0.01 * k, dy0 + 0.6 * k, 'A-SECT');                  // 벽 마감
+      poly([[dx0, dy0], [dx0 + 0.9 * k, dy0], [dx0 + 0.9 * k, dy0 + 0.04 * k], [dx0, dy0 + 0.04 * k]], 'A-CON', true);   // 슬래브 상단부
+      line(dx0 + 0.15 * k, dy0 + 0.04 * k, dx0 + 0.9 * k, dy0 + 0.04 * k, 'A-FIN');                                        // 바닥 마감
+      line(dx0 + 0.15 * k, dy0 + 0.052 * k, dx0 + 0.9 * k, dy0 + 0.052 * k, 'A-FIN');
+      poly([[dx0, dy0 + 0.04 * k], [dx0 + 0.15 * k, dy0 + 0.04 * k], [dx0 + 0.15 * k, dy0 + 0.6 * k], [dx0, dy0 + 0.6 * k]], 'A-CON', true);  // 벽
+      line(dx0 + 0.15 * k + 0.01 * k, dy0 + 0.052 * k, dx0 + 0.15 * k + 0.01 * k, dy0 + 0.6 * k, 'A-FIN');                  // 벽 마감
       poly([[dx0 + 0.15 * k, dy0 + 0.052 * k], [dx0 + 0.18 * k, dy0 + 0.052 * k],
-            [dx0 + 0.18 * k, dy0 + 0.132 * k], [dx0 + 0.15 * k, dy0 + 0.132 * k]], 'A-SECT', true);                          // 걸레받이 H80
-      text(dx0 + 0.45 * k, dy0 + 0.75 * k, 0.13, '벽-바닥 접합 상세 (4배 확대)', 'A-ANNO-TEXT');
-      text(dx0 + 0.55 * k, dy0 + 0.2 * k, 0.09, '걸레받이 H80 / 바닥 마감층 / 벽 마감', 'A-SECT');
+            [dx0 + 0.18 * k, dy0 + 0.132 * k], [dx0 + 0.15 * k, dy0 + 0.132 * k]], 'A-FIN', true);                          // 걸레받이 H80
+      text(dx0 + 0.45 * k, dy0 + 0.75 * k, 0.13, '벽-바닥 접합 상세 (4배 확대)', '2-Tx_SIZE 2.5');
+      text(dx0 + 0.55 * k, dy0 + 0.2 * k, 0.09, '걸레받이 H80 / 바닥 마감층 / 벽 마감', 'A-FIN');
       EXT(dx0 + 1.0 * k, dy0 - 0.3);
     }
     // 우물천장 단면 상세 (4배 확대, 참조용)
@@ -293,20 +294,20 @@ export function buildDXFString() {
       const yC = dy + 0.3 * k;                                              // 중앙 평천장 마감면
       const yB = yC - 0.12 * k;                                             // 밴드 하단 (단내림 120)
       poly([[dx, ySl], [dx + 0.9 * k, ySl],
-            [dx + 0.9 * k, ySl + 0.06 * k], [dx, ySl + 0.06 * k]], 'S-SLAB', true);                       // 상부 슬래브
-      for (const hx2 of [0.5, 0.65, 0.8]) line(dx + hx2 * k, ySl, dx + hx2 * k, yC + 0.03 * k, 'A-SECT'); // 달대/행거
-      poly([[dx, yB], [dx + 0.35 * k, yB], [dx + 0.35 * k, yC], [dx, yC]], 'A-SECT', true);               // 둘레 목틀 단내림 밴드 W350
-      line(dx, yB, dx + 0.35 * k, yB, 'A-SECT');                            // 석고보드 1P (상)
-      line(dx, yB - 0.01 * k, dx + 0.35 * k, yB - 0.01 * k, 'A-SECT');      // 석고보드 1P (하)
-      line(dx, yB - 0.015 * k, dx + 0.35 * k, yB - 0.015 * k, 'A-SECT');    // 마감(도배)선
-      line(dx + 0.35 * k, yB - 0.015 * k, dx + 0.35 * k, yC, 'A-SECT');     // 단내림 수직 연결부
-      line(dx + 0.35 * k, yC, dx + 0.9 * k, yC, 'A-SECT');                  // 중앙 평천장 마감
-      line(dx + 0.35 * k, yC + 0.01 * k, dx + 0.9 * k, yC + 0.01 * k, 'A-SECT');  // 평천장 석고 1P
-      text(dx + 0.45 * k, dy + 0.75 * k, 0.13, '우물천장 상세 (4배)', 'A-ANNO-TEXT');
-      text(dx + 0.55 * k, (yB + yC) / 2, 0.08, '단내림 120', 'A-ANNO-TEXT');
-      text(dx + 0.17 * k, yB - 0.07 * k, 0.08, '밴드 W350', 'A-ANNO-TEXT');
-      text(dx + 0.65 * k, ySl - 0.15 * k, 0.08, '목틀 30×30 @450', 'A-SECT');
-      text(dx + 0.17 * k, yB - 0.15 * k, 0.08, '석고 9.5T+도배', 'A-SECT');
+            [dx + 0.9 * k, ySl + 0.06 * k], [dx, ySl + 0.06 * k]], 'A-CON', true);                       // 상부 슬래브
+      for (const hx2 of [0.5, 0.65, 0.8]) line(dx + hx2 * k, ySl, dx + hx2 * k, yC + 0.03 * k, 'A-FIN'); // 달대/행거
+      poly([[dx, yB], [dx + 0.35 * k, yB], [dx + 0.35 * k, yC], [dx, yC]], 'A-FIN', true);               // 둘레 목틀 단내림 밴드 W350
+      line(dx, yB, dx + 0.35 * k, yB, 'A-FIN');                            // 석고보드 1P (상)
+      line(dx, yB - 0.01 * k, dx + 0.35 * k, yB - 0.01 * k, 'A-FIN');      // 석고보드 1P (하)
+      line(dx, yB - 0.015 * k, dx + 0.35 * k, yB - 0.015 * k, 'A-FIN');    // 마감(도배)선
+      line(dx + 0.35 * k, yB - 0.015 * k, dx + 0.35 * k, yC, 'A-FIN');     // 단내림 수직 연결부
+      line(dx + 0.35 * k, yC, dx + 0.9 * k, yC, 'A-FIN');                  // 중앙 평천장 마감
+      line(dx + 0.35 * k, yC + 0.01 * k, dx + 0.9 * k, yC + 0.01 * k, 'A-FIN');  // 평천장 석고 1P
+      text(dx + 0.45 * k, dy + 0.75 * k, 0.13, '우물천장 상세 (4배)', '2-Tx_SIZE 2.5');
+      text(dx + 0.55 * k, (yB + yC) / 2, 0.08, '단내림 120', '2-Tx_SIZE 2.5');
+      text(dx + 0.17 * k, yB - 0.07 * k, 0.08, '밴드 W350', '2-Tx_SIZE 2.5');
+      text(dx + 0.65 * k, ySl - 0.15 * k, 0.08, '목틀 30×30 @450', 'A-FIN');
+      text(dx + 0.17 * k, yB - 0.15 * k, 0.08, '석고 9.5T+도배', 'A-FIN');
       EXT(dx + 1.0 * k, dy - 0.1); EXT(dx, dy + 0.85 * k);
     }
     // 간접등 커튼박스 상세 (4배 확대, 참조용)
@@ -316,29 +317,29 @@ export function buildDXFString() {
       const yC = dy + 0.42 * k;                                             // 천장 마감면
       const wallX = dx + 0.6 * k;                                           // 벽 내측면
       poly([[dx, ySl], [dx + 0.8 * k, ySl],
-            [dx + 0.8 * k, ySl + 0.06 * k], [dx, ySl + 0.06 * k]], 'S-SLAB', true);                       // 천장 슬래브
-      poly([[wallX, dy], [wallX + 0.15 * k, dy], [wallX + 0.15 * k, ySl], [wallX, ySl]], 'S-WALL', true); // 벽체
+            [dx + 0.8 * k, ySl + 0.06 * k], [dx, ySl + 0.06 * k]], 'A-CON', true);                       // 천장 슬래브
+      poly([[wallX, dy], [wallX + 0.15 * k, dy], [wallX + 0.15 * k, ySl], [wallX, ySl]], 'A-CON', true); // 벽체
       const bx0 = wallX - 0.3 * k, by0 = yC - 0.18 * k;                     // 커튼박스 300×180
-      line(dx, yC, bx0, yC, 'A-SECT');                                      // 천장 마감선 (박스 앞까지)
-      poly([[bx0, by0], [wallX, by0], [wallX, yC], [bx0, yC]], 'A-SECT', true);                           // 커튼박스 (목공)
+      line(dx, yC, bx0, yC, 'A-FIN');                                      // 천장 마감선 (박스 앞까지)
+      poly([[bx0, by0], [wallX, by0], [wallX, yC], [bx0, yC]], 'A-FIN', true);                           // 커튼박스 (목공)
       const lx2 = bx0 + 0.07 * k, ly2 = by0 + 0.05 * k;                     // 간접조명 위치
-      arc(lx2, ly2, 0.08, 0, 360, 'E-LITE');
-      line(lx2 - 0.02 * k, ly2 + 0.03 * k, lx2 - 0.06 * k, yC - 0.02 * k, 'E-LITE');   // 빛 화살표(상향)
-      line(lx2 + 0.01 * k, ly2 + 0.04 * k, lx2 - 0.02 * k, yC - 0.01 * k, 'E-LITE');
-      arc(wallX - 0.05 * k, by0 + 0.03 * k, 0.04, 0, 360, 'A-SECT');        // 커튼레일
-      line(wallX - 0.05 * k, by0, wallX - 0.05 * k, by0 - 0.15 * k, 'A-SECT');          // 커튼 드롭
-      text(dx + 0.4 * k, dy + 0.75 * k, 0.13, '간접등 커튼박스 상세 (4배)', 'A-ANNO-TEXT');
-      text(bx0 + 0.15 * k, by0 - 0.08 * k, 0.08, '커튼박스 300×180', 'A-ANNO-TEXT');
-      text(dx + 0.14 * k, ly2, 0.08, 'T5/LED 간접', 'A-SECT');
-      text(bx0 - 0.1 * k, yC - 0.06 * k, 0.08, '몰딩 마감', 'A-SECT');
-      text(wallX - 0.12 * k, by0 - 0.22 * k, 0.08, '커튼레일 공간', 'A-SECT');
+      arc(lx2, ly2, 0.08, 0, 360, 'A-ETC');
+      line(lx2 - 0.02 * k, ly2 + 0.03 * k, lx2 - 0.06 * k, yC - 0.02 * k, 'A-ETC');   // 빛 화살표(상향)
+      line(lx2 + 0.01 * k, ly2 + 0.04 * k, lx2 - 0.02 * k, yC - 0.01 * k, 'A-ETC');
+      arc(wallX - 0.05 * k, by0 + 0.03 * k, 0.04, 0, 360, 'A-FIN');        // 커튼레일
+      line(wallX - 0.05 * k, by0, wallX - 0.05 * k, by0 - 0.15 * k, 'A-FIN');          // 커튼 드롭
+      text(dx + 0.4 * k, dy + 0.75 * k, 0.13, '간접등 커튼박스 상세 (4배)', '2-Tx_SIZE 2.5');
+      text(bx0 + 0.15 * k, by0 - 0.08 * k, 0.08, '커튼박스 300×180', '2-Tx_SIZE 2.5');
+      text(dx + 0.14 * k, ly2, 0.08, 'T5/LED 간접', 'A-FIN');
+      text(bx0 - 0.1 * k, yC - 0.06 * k, 0.08, '몰딩 마감', 'A-FIN');
+      text(wallX - 0.12 * k, by0 - 0.22 * k, 0.08, '커튼레일 공간', 'A-FIN');
       EXT(dx + 0.9 * k, dy - 0.1); EXT(dx, dy + 0.85 * k);
     }
   }
 
   if (!isFinite(mnX)) return;
-  text(mnX + 0.2, mnY - 0.6, 0.2, `${P.name || 'PlanShot'}  ${P.company || ''}  단위 mm`, 'A-ANNO-TEXT', 0);
-  text(mnX + 0.2, mnY - 0.95, 0.12, '개략 실측 — 시공 발주 전 정밀실측 필요 / iPhone LiDAR', 'A-ANNO-TEXT', 0);
+  text(mnX + 0.2, mnY - 0.6, 0.2, `${P.name || 'PlanShot'}  ${P.company || ''}  단위 mm`, '2-Tx_SIZE 2.5', 0);
+  text(mnX + 0.2, mnY - 0.95, 0.12, '개략 실측 — 시공 발주 전 정밀실측 필요 / iPhone LiDAR', '2-Tx_SIZE 2.5', 0);
   EXT(mnX, mnY - 1.1);
 
   g(0, 'SECTION'); g(2, 'HEADER');
@@ -351,14 +352,16 @@ export function buildDXFString() {
   g(0, 'TABLE'); g(2, 'LTYPE'); g(70, '1');
   g(0, 'LTYPE'); g(2, 'CONTINUOUS'); g(70, '64'); g(3, 'Solid line'); g(72, '65'); g(73, '0'); g(40, '0.0');
   g(0, 'ENDTAB');
-  const layers = [['0', 7], ['S-WALL', 8], ['S-SLAB', 8], ['A-WALL', 7], ['A-SECT', 5], ['A-DOOR', 3],
-                  ['A-GLAZ', 4], ['A-FURN', 8], ['A-ANNO-TEXT', 7], ['A-AREA', 2], ['A-ANNO-DIMS', 1], ['E-LITE', 2]];
+  const layers = [['0', 7], ['0-Sheet', 6], ['1-Axis', 9], ['1-Dim_axis', 150], ['1-Dim_axis-in', 8],
+                  ['1-SYM_room', 6], ['2-Tx_SIZE 2.5', 150], ['2-Tx_SIZE 1.5', 150],
+                  ['A-CON', 3], ['A-FIN', 8], ['A-WIN-sec', 150], ['A-DOOR-plan', 8],
+                  ['A-FUR', 64], ['A-HATCH', 64], ['A-ETC', 9]];
   g(0, 'TABLE'); g(2, 'LAYER'); g(70, String(layers.length));
   for (const [nm, c] of layers) { g(0, 'LAYER'); g(2, nm); g(70, '64'); g(62, String(c)); g(6, 'CONTINUOUS'); }
   g(0, 'ENDTAB');
   g(0, 'TABLE'); g(2, 'STYLE'); g(70, '2');
-  g(0, 'STYLE'); g(2, 'STANDARD'); g(70, '0'); g(40, '0.0'); g(41, '1.0'); g(50, '0.0'); g(71, '0'); g(42, '2.5'); g(3, 'Dotum.ttc'); g(4, '');
-  g(0, 'STYLE'); g(2, 'DOTUM'); g(70, '0'); g(40, '0.0'); g(41, '1.0'); g(50, '0.0'); g(71, '0'); g(42, '2.5'); g(3, 'Dotum.ttc'); g(4, '');
+  g(0, 'STYLE'); g(2, 'STANDARD'); g(70, '0'); g(40, '0.0'); g(41, '1.0'); g(50, '0.0'); g(71, '0'); g(42, '2.5'); g(3, 'HDOTUM.TTF'); g(4, '');
+  g(0, 'STYLE'); g(2, 'DOTUM'); g(70, '0'); g(40, '0.0'); g(41, '1.0'); g(50, '0.0'); g(71, '0'); g(42, '2.5'); g(3, 'HDOTUM.TTF'); g(4, '');
   g(0, 'ENDTAB'); g(0, 'ENDSEC');
   g(0, 'SECTION'); g(2, 'BLOCKS'); g(0, 'ENDSEC');
   g(0, 'SECTION'); g(2, 'ENTITIES');
