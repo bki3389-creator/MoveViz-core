@@ -106,7 +106,7 @@ function currentWalkPose() {
   camera.getWorldDirection(dir);
   return { pos: [camera.position.x, camera.position.y, camera.position.z],
            look: [camera.position.x + dir.x * 3, camera.position.y + dir.y * 3, camera.position.z + dir.z * 3],
-           fov: 62 };
+           fov: 70 };   // 걷기 화각과 동일
 }
 /// 걷는 중이면 현재 시점, 아니면 마지막으로 걷다 멈춘 시점(없으면 null)
 export function getWalkPose() { return walk ? currentWalkPose() : lastWalkPose; }
@@ -116,6 +116,7 @@ export function enterWalk(cx, cz) {
   if (walk) return;
   walk = { keys: {}, yaw: 0, pitch: 0, last: performance.now() };
   camera.position.set(cx, 1.5, cz);
+  camera.fov = 70; camera.updateProjectionMatrix();   // 걷기 화각 — 실내 자연 시야(수직 70°)
   walk.yaw = Math.atan2(-(controls.target.x - cx), -(controls.target.z - cz));
   controls.enabled = false;
   renderer.domElement.requestPointerLock?.();
@@ -135,6 +136,7 @@ export function exitWalk() {
   document.removeEventListener('keyup', onWalkKeyUp, true);
   document.removeEventListener('pointerlockchange', onPlc);
   if (document.pointerLockElement) document.exitPointerLock?.();
+  camera.fov = 52; camera.updateProjectionMatrix();   // 궤도 뷰 화각 복원
   controls.enabled = true;
   // 궤도 타깃을 시선 앞 2m 로 — 걷다 나가도 카메라가 튀지 않게
   controls.target.set(
@@ -174,6 +176,108 @@ function colorMat(color, rough = 0.9, metal = 0.0) {
 
 // 바닥 마감 절차 텍스처: 캔버스 1장이 실제 SIZE(m)×SIZE(m) 를 표현 → UV(m좌표)에 맞춰 반복
 const texCache = new Map();
+// ── 벽 마감 패턴: 마감별 최소 1개 재질 표현 (캔버스 캐시, 텍스처는 벽 치수별 repeat) ──
+const wallCvCache = new Map();
+function shade(hex, k) {
+  const r2 = Math.min(255, Math.max(0, ((hex >> 16) & 255) * k));
+  const g2 = Math.min(255, Math.max(0, ((hex >> 8) & 255) * k));
+  const b2 = Math.min(255, Math.max(0, (hex & 255) * k));
+  return `rgb(${r2 | 0},${g2 | 0},${b2 | 0})`;
+}
+function wallCanvas(finishId, baseColor) {
+  if (wallCvCache.has(finishId)) return wallCvCache.get(finishId);
+  const SPEC = {
+    wl_tile:  { size: 1.2, kind: 'grid', tw: 0.3, th: 0.6 },
+    wl_stone: { size: 2.4, kind: 'grid', tw: 1.2, th: 0.6 },
+    wl_brick: { size: 0.76, kind: 'brick', bw: 0.19, bh: 0.057 },
+    wl_wood:  { size: 0.48, kind: 'louver', slat: 0.06 },
+    wl_wains: { size: 1.2, kind: 'wains', stretchY: true },
+    wl_mural: { size: 2.4, kind: 'mural', stretchY: true },
+    wl_silk:  { size: 1.06, kind: 'weave' },
+    wl_paper: { size: 1.06, kind: 'weave' },
+    wl_film:  { size: 1.2, kind: 'wood', plank: 0.3 },
+  }[finishId];
+  if (!SPEC) { wallCvCache.set(finishId, null); return null; }
+  const px = 512, c = document.createElement('canvas');
+  c.width = c.height = px;
+  const g = c.getContext('2d');
+  const mpp = px / SPEC.size;
+  g.fillStyle = shade(baseColor, 1); g.fillRect(0, 0, px, px);
+  if (SPEC.kind === 'grid') {
+    g.strokeStyle = 'rgba(70,80,90,.55)'; g.lineWidth = 2;
+    for (let x = 0; x <= SPEC.size + 1e-6; x += SPEC.tw) {
+      g.beginPath(); g.moveTo(x * mpp, 0); g.lineTo(x * mpp, px); g.stroke();
+    }
+    for (let y = 0; y <= SPEC.size + 1e-6; y += SPEC.th) {
+      g.beginPath(); g.moveTo(0, y * mpp); g.lineTo(px, y * mpp); g.stroke();
+    }
+  } else if (SPEC.kind === 'brick') {
+    const rows = Math.round(SPEC.size / SPEC.bh);
+    g.fillStyle = '#d8d2c8'; g.fillRect(0, 0, px, px);   // 줄눈
+    for (let r3 = 0; r3 < rows; r3++) {
+      const y0 = r3 * SPEC.bh * mpp, off = (r3 % 2) * SPEC.bw / 2;
+      for (let x = -SPEC.bw; x < SPEC.size + SPEC.bw; x += SPEC.bw) {
+        g.fillStyle = shade(baseColor, 0.86 + ((r3 * 7 + Math.round(x * 100)) % 5) * 0.055);
+        g.fillRect((x + off) * mpp + 1.5, y0 + 1.5, SPEC.bw * mpp - 3, SPEC.bh * mpp - 3);
+      }
+    }
+  } else if (SPEC.kind === 'louver') {
+    const n = Math.round(SPEC.size / SPEC.slat);
+    for (let i = 0; i < n; i++) {
+      const x0 = i * SPEC.slat * mpp;
+      const gr = g.createLinearGradient(x0, 0, x0 + SPEC.slat * mpp, 0);
+      gr.addColorStop(0, shade(baseColor, 1.08));
+      gr.addColorStop(0.85, shade(baseColor, 0.88));
+      gr.addColorStop(1, shade(baseColor, 0.55));
+      g.fillStyle = gr; g.fillRect(x0, 0, SPEC.slat * mpp, px);
+    }
+  } else if (SPEC.kind === 'wains') {
+    // 하부 40% 패널 몰딩 + 허리몰딩 (stretchY: 벽 전체 높이에 1회)
+    g.strokeStyle = 'rgba(90,90,85,.5)'; g.lineWidth = 3;
+    g.strokeRect(0, px * 0.62, px, px * 0.38);
+    for (let i = 0; i < 3; i++) {
+      g.strokeRect((0.04 + i * 0.32) * px, px * 0.68, px * 0.26, px * 0.26);
+    }
+    g.lineWidth = 5; g.beginPath(); g.moveTo(0, px * 0.60); g.lineTo(px, px * 0.60); g.stroke();
+  } else if (SPEC.kind === 'mural') {
+    const gr = g.createLinearGradient(0, 0, px, px * 0.8);
+    gr.addColorStop(0, shade(baseColor, 1.1));
+    gr.addColorStop(0.5, shade(baseColor, 0.92));
+    gr.addColorStop(1, shade(baseColor, 0.78));
+    g.fillStyle = gr; g.fillRect(0, 0, px, px);
+    g.globalAlpha = 0.12;
+    for (let i = 0; i < 5; i++) {
+      g.fillStyle = shade(baseColor, 0.7 + i * 0.12);
+      g.beginPath(); g.ellipse((i * 137 % px), (i * 211 % px), 150, 90, i, 0, Math.PI * 2); g.fill();
+    }
+    g.globalAlpha = 1;
+  } else if (SPEC.kind === 'weave') {
+    g.globalAlpha = 0.05; g.strokeStyle = shade(baseColor, 0.6); g.lineWidth = 1;
+    for (let x = 0; x < px; x += 3) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, px); g.stroke(); }
+    g.globalAlpha = 1;
+  } else if (SPEC.kind === 'wood') {
+    const rows = Math.round(SPEC.size / SPEC.plank);
+    for (let i = 0; i < rows; i++) {
+      g.fillStyle = shade(baseColor, 0.9 + (i % 3) * 0.07);
+      g.fillRect(0, i * SPEC.plank * mpp, px, SPEC.plank * mpp - 2);
+    }
+  }
+  const out = { canvas: c, size: SPEC.size, stretchY: !!SPEC.stretchY };
+  wallCvCache.set(finishId, out);
+  return out;
+}
+
+/// 벽 재질 — 패턴 있으면 벽 치수에 맞춘 repeat 텍스처, 없으면 단색
+function wallMat(finishId, col, lenM, hM) {
+  const cv2 = wallCanvas(finishId, col);
+  if (!cv2) return colorMat(col, 0.92);
+  const tex = new THREE.CanvasTexture(cv2.canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  tex.repeat.set(Math.max(0.4, lenM / cv2.size), cv2.stretchY ? 1 : Math.max(0.4, hM / cv2.size));
+  return new THREE.MeshStandardMaterial({ color: 0xffffff, map: tex, roughness: 0.9 });
+}
+
 function floorTexture(finishId, baseColor) {
   if (texCache.has(finishId)) return texCache.get(finishId);
   const SPEC = {
@@ -497,7 +601,7 @@ function buildRoom(r, g, allowRealLight) {
     if (!holes.length) {
       wallMesh = new THREE.Mesh(baseGeo, colorMat(col, 0.92));
     } else {
-      let brush = new Brush(baseGeo, colorMat(col, 0.92));
+      let brush = new Brush(baseGeo, wallMat(finish, col, wallLen, H));
       brush.updateMatrixWorld();
       for (const hRec of holes) {
         const hole = new Brush(new THREE.BoxGeometry(
@@ -507,9 +611,11 @@ function buildRoom(r, g, allowRealLight) {
         brush = csgEval.evaluate(brush, hole, SUBTRACTION);
       }
       wallMesh = brush;
-      wallMesh.material = colorMat(col, 0.92);
+      wallMesh.material = wallMat(finish, col, wallLen, H);
     }
-    if (demo) { wallMesh.material.transparent = true; wallMesh.material.opacity = 0.25; wallMesh.material.color.set(0xd9534f); }
+    if (demo) {   // 철거 표시 — 캐시 재질 오염 방지, 전용 반투명 재질
+      wallMesh.material = new THREE.MeshStandardMaterial({ color: 0xd9534f, transparent: true, opacity: 0.25, roughness: 0.9 });
+    }
     wallMesh.castShadow = true; wallMesh.receiveShadow = true;
     wallMesh.position.set(cxW, H / 2, czW);
     wallMesh.userData = { roomId: r.id, kind: 'wall', wallKey: w.key };

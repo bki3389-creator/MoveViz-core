@@ -172,7 +172,11 @@ function interiorPose() {
 }
 async function runRenderShot(sampleTarget = 96, w = 1120, h = 700, mode = 'auto') {
   const { renderShot, stopRender, isRendering } = await import('./render.js');
-  if (isRendering()) return;
+  if (isRendering()) {           // 재클릭 먹통 방지: 이전 렌더를 중지시키고 이어서 시작
+    stopRender();
+    await new Promise(r2 => setTimeout(r2, 400));
+    if (isRendering()) { alert('이전 렌더 종료 중 — 잠시 후 다시 눌러주세요'); return; }
+  }
   setTab('3d');
   const modal = $('shotModal'), cv2 = $('shotCanvas');
   modal.hidden = false;
@@ -242,6 +246,12 @@ document.addEventListener('keydown', e => {
   }
   if (e.key === 'Delete' || e.key === 'Backspace' || k === 'e') { deleteSelected(); return; }
   if (e.key === 'Escape') {
+    const sm = $('shotModal');
+    if (sm && !sm.hidden) {   // Esc = 렌더샷 모달 닫기 (렌더 중이면 중지)
+      import('./render.js').then(m2 => m2.stopRender());
+      sm.hidden = true;
+      return;
+    }
     state.pendingLine = null; state.mode = 'select'; state.tool2d = 'select';
     cancelWallDraw(); syncToolbar(); return;
   }
