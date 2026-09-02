@@ -2,7 +2,7 @@
 // 인터랙션 수식은 아키톤 FloorPlanEditor에서 이식: 개구부 배치 = snap(t·L − w/2) + 양끝 클램프,
 // 슬라이드 = 내적 투영, 벽 드래그 = 법선 방향 이동. 인쇄용 방별 렌더(renderRoomImage) 포함.
 
-import { state, emit, layoutOffsets, wallsOf, wallSolidPieces, metricsOf, room, snap,
+import { state, emit, layoutOffsets, wallsOf, wallSolidPieces, metricsOf, detectRegions, room, snap,
          addOpening, slideOpening, addInnerWall, moveWall, moveFurniture, pushHistory,
          moveRoomBy, snapRoomPos } from './state.js';
 import { item } from './catalog.js';
@@ -284,6 +284,20 @@ function paintRoom(g, r, off, P, s, th, interactive) {
         g.fillStyle = 'rgba(90,100,115,0.85)'; g.font = '9px sans-serif';
         g.fillText(`${item(r.floorFinish)?.name ?? ''} · ${item(r.wallFinish)?.name ?? ''} · ${item(r.ceilFinish)?.name ?? ''}`, cx, cy + 26);
       }
+    }
+  }
+
+  // 가벽으로 나뉜 구역 면적 (blueprint3d 룸 검출 이식 — 표시용)
+  if (interactive) {
+    const regs = detectRegions(r);
+    if (regs.length >= 2) {
+      g.textAlign = 'center';
+      regs.forEach((rg, i2) => {
+        const [x, y] = P(rg.cx, rg.cz);
+        g.fillStyle = 'rgba(21,127,190,0.75)';
+        g.font = '600 10px sans-serif';
+        g.fillText(`구역${i2 + 1} · ${rg.area.toFixed(1)}㎡`, x, y + 24);
+      });
     }
   }
 

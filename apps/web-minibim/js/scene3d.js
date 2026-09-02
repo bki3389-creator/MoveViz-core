@@ -3,6 +3,7 @@
 
 import * as THREE from '../vendor/three.module.js';
 import { OrbitControls } from '../vendor/addons/controls/OrbitControls.js';
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { state, emit, layoutOffsets, wallsOf, wallCuts, ceilH, addLight, room } from './state.js';
 import { item, rateOf, FINISH_WALL } from './catalog.js';
 
@@ -80,6 +81,9 @@ function animate() {
 }
 
 // ── 씬 구성 ─────────────────────────────────────────
+
+const csgEval = new Evaluator();
+csgEval.useGroups = false;
 
 const matCache = new Map();
 function colorMat(color, rough = 0.9, metal = 0.0) {
@@ -348,52 +352,77 @@ function buildRoom(r, g, allowRealLight) {
     const finish = r.wallOverrides?.[w.key] || r.wallFinish;
     const col = finishColor(finish, 0xdedad2);
     const demo = r.wallTypes?.[w.key] === 'wt_demo';
-    const boxes = [];   // {lo, hi, y0, y1}
+    // ── CSG 벽 (Pascal Editor 방식 이식): 벽 = 코너까지 연장한 단일 박스 − 개구부/공유스팬 불리언
     const cutsAll = wallCuts(w);
-    let cursor = w.lo;
+    const halfT = wallT / 2;
+    const extLo = w.inner ? halfT : halfT, extHi = extLo;      // 코너/접합 채움 연장
+    const wallLen = (w.hi + extHi) - (w.lo - extLo);
+    const cxW = w.dir === 'z' ? (w.lo - extLo + w.hi + extHi) / 2 : w.pos;
+    const czW = w.dir === 'z' ? w.pos : (w.lo - extLo + w.hi + extHi) / 2;
+    const baseGeo = new THREE.BoxGeometry(
+      w.dir === 'z' ? wallLen : wallT, H, w.dir === 'z' ? wallT : wallLen);
+    let wallMesh;
+    const holes = [];
     for (const c of cutsAll) {
-      if (c.lo > cursor + 0.01) boxes.push({ lo: cursor, hi: c.lo, y0: 0, y1: H });
+      const len = c.hi - c.lo;
+      if (len < 0.02) continue;
+      const hcx = (w.dir === 'z' ? (c.lo + c.hi) / 2 : w.pos) - cxW;
+      const hcz = (w.dir === 'z' ? w.pos : (c.lo + c.hi) / 2) - czW;
       const o = c.o;
+      let y0 = -0.05, y1 = H + 0.05;                           // shared: 전체 높이 제거
       if (o) {
-        if (o.type === 'door') {
-          boxes.push({ lo: o.lo, hi: o.hi, y0: o.h, y1: H });                       // 인방
-        } else {
-          const sill = Math.max(0.1, (H - o.h) * 0.55);                              // 창대 높이 근사
-          boxes.push({ lo: o.lo, hi: o.hi, y0: 0, y1: sill });
-          boxes.push({ lo: o.lo, hi: o.hi, y0: Math.min(H, sill + o.h), y1: H });
-          if (!o.foreign) boxes.push({ lo: o.lo, hi: o.hi, y0: sill, y1: sill + o.h, glass: true });
+        if (o.type === 'door') { y0 = -0.05; y1 = o.h; }
+        else {
+          const sill = Math.max(0.1, (H - o.h) * 0.55);
+          y0 = sill; y1 = sill + o.h;
+          if (!o.foreign) {
+            const glass = new THREE.Mesh(
+              new THREE.BoxGeometry(w.dir === 'z' ? len : 0.02, o.h, w.dir === 'z' ? 0.02 : len),
+              new THREE.MeshStandardMaterial({ color: 0x9fc8e8, transparent: true, opacity: 0.3, roughness: 0.1 }));
+            glass.position.set(cxW + hcx, sill + o.h / 2, czW + hcz);
+            glass.userData = { roomId: r.id, kind: 'wall', wallKey: w.key };
+            g.add(glass);
+          }
         }
       }
-      // c.shared → 앞선 방이 그리는 구간: 아무것도 안 그림
-      cursor = Math.max(cursor, c.hi);
+      holes.push({ hcx, hcz, y0, y1, len });
     }
-    if (cursor < w.hi - 0.01) boxes.push({ lo: cursor, hi: w.hi, y0: 0, y1: H });
-    if (!cutsAll.length) { boxes.length = 0; boxes.push({ lo: w.lo, hi: w.hi, y0: 0, y1: H }); }
-
-    for (const b of boxes) {
-      const len = b.hi - b.lo, hgt = b.y1 - b.y0;
-      if (len < 0.02 || hgt < 0.02) continue;
-      let mesh;
-      if (b.glass) {
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(w.dir === 'z' ? len : 0.02, hgt, w.dir === 'z' ? 0.02 : len),
-          new THREE.MeshStandardMaterial({ color: 0x9fc8e8, transparent: true, opacity: 0.3, roughness: 0.1 }));
-      } else {
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(w.dir === 'z' ? len : wallT, hgt, w.dir === 'z' ? wallT : len),
-          colorMat(col, 0.92));
-        if (demo) { mesh.material.transparent = true; mesh.material.opacity = 0.25; mesh.material.color.set(0xd9534f); }
-        mesh.castShadow = true; mesh.receiveShadow = true;
+    if (!holes.length) {
+      wallMesh = new THREE.Mesh(baseGeo, colorMat(col, 0.92));
+    } else {
+      let brush = new Brush(baseGeo, colorMat(col, 0.92));
+      brush.updateMatrixWorld();
+      for (const hRec of holes) {
+        const hole = new Brush(new THREE.BoxGeometry(
+          w.dir === 'z' ? hRec.len : wallT + 0.06, hRec.y1 - hRec.y0, w.dir === 'z' ? wallT + 0.06 : hRec.len));
+        hole.position.set(hRec.hcx, (hRec.y0 + hRec.y1) / 2 - H / 2, hRec.hcz);
+        hole.updateMatrixWorld();
+        brush = csgEval.evaluate(brush, hole, SUBTRACTION);
       }
-      const cx = w.dir === 'z' ? (b.lo + b.hi) / 2 : w.pos;
-      const cz = w.dir === 'z' ? w.pos : (b.lo + b.hi) / 2;
-      mesh.position.set(cx, (b.y0 + b.y1) / 2, cz);
-      mesh.userData = { roomId: r.id, kind: 'wall', wallKey: w.key };
-      g.add(mesh);
-      // 걸레받이 (바닥에 닿는 조각만)
-      if (!b.glass && b.y0 === 0 && !demo) {
+      wallMesh = brush;
+      wallMesh.material = colorMat(col, 0.92);
+    }
+    if (demo) { wallMesh.material.transparent = true; wallMesh.material.opacity = 0.25; wallMesh.material.color.set(0xd9534f); }
+    wallMesh.castShadow = true; wallMesh.receiveShadow = true;
+    wallMesh.position.set(cxW, H / 2, czW);
+    wallMesh.userData = { roomId: r.id, kind: 'wall', wallKey: w.key };
+    g.add(wallMesh);
+    // 걸레받이: 바닥에 닿는 실체 구간(문·공유 컷 제외)
+    if (!demo) {
+      let cur2 = w.lo;
+      const floorCuts = cutsAll.filter(c => !c.o || c.o.type === 'door');
+      const spans = [];
+      for (const c of floorCuts) {
+        if (c.lo > cur2 + 0.02) spans.push([cur2, c.lo]);
+        cur2 = Math.max(cur2, c.hi);
+      }
+      if (cur2 < w.hi - 0.02) spans.push([cur2, w.hi]);
+      if (!floorCuts.length) { spans.length = 0; spans.push([w.lo, w.hi]); }
+      for (const [a2, b2] of spans) {
         const bb2 = new THREE.Mesh(new THREE.BoxGeometry(
-          w.dir === 'z' ? (b.hi - b.lo) : wallT + 0.02, 0.08, w.dir === 'z' ? wallT + 0.02 : (b.hi - b.lo)),
+          w.dir === 'z' ? (b2 - a2) : wallT + 0.02, 0.08, w.dir === 'z' ? wallT + 0.02 : (b2 - a2)),
           colorMat(0x6e5a44, 0.85));
-        bb2.position.set(cx, 0.04, cz);
+        bb2.position.set(w.dir === 'z' ? (a2 + b2) / 2 : w.pos, 0.04, w.dir === 'z' ? w.pos : (a2 + b2) / 2);
         bb2.userData = { roomId: r.id, kind: 'wall', wallKey: w.key };
         g.add(bb2);
       }

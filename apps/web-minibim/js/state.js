@@ -638,3 +638,105 @@ export function wallSolidPieces(wall) {
   if (!pieces.length && !wallCuts(wall).length) pieces.push([wall.lo, wall.hi]);
   return pieces;
 }
+
+// ── 이식 2: 실(구역) 자동 검출 — blueprint3d 룸 검출의 맨해튼 등가(그리드 분해+플러드필).
+// 가벽(xw/zw)이 방을 나누면 구역별 폴리곤·면적을 돌려준다. 표시용(견적은 방 단위 유지).
+export function detectRegions(r) {
+  const plan = r.plan, bd = plan.boundary || [];
+  if (bd.length < 3 || (!plan.xw?.length && !plan.zw?.length)) return [];
+  const xs = new Set(), zs = new Set();
+  for (const p2 of bd) { xs.add(p2[0]); zs.add(p2[1]); }
+  for (const w of plan.xw || []) { xs.add(w.pos); for (const s2 of w.segs || []) { zs.add(s2[0]); zs.add(s2[1]); } }
+  for (const w of plan.zw || []) { zs.add(w.pos); for (const s2 of w.segs || []) { xs.add(s2[0]); xs.add(s2[1]); } }
+  const X = [...xs].sort((a, b) => a - b), Z = [...zs].sort((a, b) => a - b);
+  const nx = X.length - 1, nz = Z.length - 1;
+  if (nx < 1 || nz < 1 || nx * nz > 4000) return [];
+  // 셀 유효성(방 내부) + 셀 간 벽 차단 여부
+  const inside = (i, j) => pointInPoly((X[i] + X[i + 1]) / 2, (Z[j] + Z[j + 1]) / 2, bd);
+  const wallBetweenX = (x, z0, z1) =>   // x= 위치 세로벽이 z0~z1 사이를 막는가
+    (plan.xw || []).some(w => Math.abs(w.pos - x) < 0.03 &&
+      (w.segs || []).some(s2 => Math.min(s2[0], s2[1]) < (z0 + z1) / 2 && Math.max(s2[0], s2[1]) > (z0 + z1) / 2));
+  const wallBetweenZ = (z, x0, x1) =>
+    (plan.zw || []).some(w => Math.abs(w.pos - z) < 0.03 &&
+      (w.segs || []).some(s2 => Math.min(s2[0], s2[1]) < (x0 + x1) / 2 && Math.max(s2[0], s2[1]) > (x0 + x1) / 2));
+  const id = Array.from({ length: nx }, () => new Array(nz).fill(-1));
+  let regions = 0;
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+    if (id[i][j] !== -1 || !inside(i, j)) continue;
+    const stack = [[i, j]];
+    id[i][j] = regions;
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      const tryGo = (a2, b2, blocked) => {
+        if (a2 < 0 || b2 < 0 || a2 >= nx || b2 >= nz) return;
+        if (id[a2][b2] !== -1 || blocked || !inside(a2, b2)) return;
+        id[a2][b2] = regions; stack.push([a2, b2]);
+      };
+      tryGo(a + 1, b, wallBetweenX(X[a + 1], Z[b], Z[b + 1]));
+      tryGo(a - 1, b, wallBetweenX(X[a], Z[b], Z[b + 1]));
+      tryGo(a, b + 1, wallBetweenZ(Z[b + 1], X[a], X[a + 1]));
+      tryGo(a, b - 1, wallBetweenZ(Z[b], X[a], X[a + 1]));
+    }
+    regions++;
+  }
+  if (regions < 2) return [];
+  const out = [];
+  for (let k = 0; k < regions; k++) {
+    let area = 0, cx = 0, cz = 0;
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) if (id[i][j] === k) {
+      const a2 = (X[i + 1] - X[i]) * (Z[j + 1] - Z[j]);
+      area += a2;
+      cx += (X[i] + X[i + 1]) / 2 * a2; cz += (Z[j] + Z[j + 1]) / 2 * a2;
+    }
+    if (area > 0.3) out.push({ area, cx: cx / area, cz: cz / area });
+  }
+  return out.length >= 2 ? out : [];
+}
+
+// ── 이식 3: 직교 보정(straighten) — openPlan3D 의 RoomPlan 스캔 직각 스냅.
+// 벽 길이 가중 ×4 원형평균으로 지배축을 찾아 전체 회전 → 좌표 10mm 스냅.
+export function straightenRoom(r) {
+  const bd = r.plan.boundary;
+  if (!bd || bd.length < 3) return false;
+  pushHistory(r);
+  let sx = 0, sy = 0;
+  for (let i = 0; i < bd.length; i++) {
+    const a = bd[i], b = bd[(i + 1) % bd.length];
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const len = Math.hypot(dx, dz);
+    if (len < 0.05) continue;
+    const a4 = 4 * Math.atan2(dz, dx);
+    sx += len * Math.cos(a4); sy += len * Math.sin(a4);
+  }
+  const theta = Math.atan2(sy, sx) / 4;
+  const bb = bboxOf(r.plan);
+  const cx0 = (bb.minX + bb.maxX) / 2, cz0 = (bb.minZ + bb.maxZ) / 2;
+  const c = Math.cos(-theta), sn = Math.sin(-theta);
+  const sn10 = v => Math.round(v * 100) / 100;
+  const rot = p2 => {
+    const dx = p2[0] - cx0, dz = p2[1] - cz0;
+    return [sn10(cx0 + dx * c - dz * sn), sn10(cz0 + dx * sn + dz * c)];
+  };
+  const plan = r.plan;
+  plan.boundary = plan.boundary.map(rot);
+  // 회전 후 세로/가로벽 재분류가 필요할 만큼 비뚤면 xw/zw 는 pos 만 회전 불가 → 단순 스냅만
+  plan.xw.forEach(w => { w.pos = sn10(w.pos); w.segs = w.segs.map(s2 => [sn10(s2[0]), sn10(s2[1])]); });
+  plan.zw.forEach(w => { w.pos = sn10(w.pos); w.segs = w.segs.map(s2 => [sn10(s2[0]), sn10(s2[1])]); });
+  plan.openings.forEach(op => {
+    op.wall_pos = sn10(op.wall_pos ?? 0);
+    if (op.span) op.span = op.span.map(sn10);
+  });
+  plan.furniture.forEach(f => {
+    if (f.obb) f.obb = f.obb.map(rot);
+    if (f.polygon) f.polygon = f.polygon.map(rot);
+  });
+  (plan.rooms || []).forEach(rm => {
+    if (rm.polygon) { rm.polygon = rm.polygon.map(rot); rm.area_m2 = polyArea(rm.polygon); }
+  });
+  (r.lights || []).forEach(l => {
+    [l.x, l.z] = rot([l.x, l.z]);
+    if (l.x2 != null) [l.x2, l.z2] = rot([l.x2, l.z2]);
+  });
+  emit('project');
+  return Math.abs(theta) > 0.002;
+}

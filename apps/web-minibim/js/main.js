@@ -1,6 +1,6 @@
 // main.js — UI 배선: 헤더/탭/2D 편집 도구/좌측 방 목록/우측 인스펙터/견적/인쇄(도면+견적).
 
-import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore, addExtra, setExtraQty,
+import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore, addExtra, setExtraQty, straightenRoom,
          selectedRoom, room, metricsOf, wallsOf, removeLight, undo,
          updateOpening, removeOpening, removeInnerWall, scaleRoom,
          addFurniture, rotateFurniture, resizeFurniture, removeFurniture, arrangeRooms } from './state.js';
@@ -455,6 +455,10 @@ function renderInspector() {
       const wv = Number(wIn.value.replace(/[^\d]/g, '')) / 1000 || 0;
       const dv = Number(dIn.value.replace(/[^\d]/g, '')) / 1000 || 0;
       if (wv || dv) scaleRoom(r, wv, dv);
+    }));
+    det.appendChild(btn('직교 보정 (비뚤어진 스캔 펴기)', '', () => {
+      const changed = straightenRoom(r);
+      alert(changed ? '지배축 기준으로 회전·10mm 스냅했습니다.' : '이미 직교에 가깝습니다 (10mm 스냅만 적용).');
     }));
     el.appendChild(det);
     el.appendChild(tip('3D에서 벽·바닥·천장·가구·조명을 클릭하면 개별 편집. 2D 도구로 문/창/가벽 추가. Ctrl+Z 되돌리기.'));
