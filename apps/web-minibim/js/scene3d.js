@@ -301,6 +301,8 @@ function floorTexture(finishId, baseColor) {
   texCache.set(fk, tex);
   return tex;
 }
+/// 가구 파트 재질 — 목재 결 텍스처·금속 반사·도기 유광·패브릭 고러프 (FM 색으로 역할 판별)
+let furnWoodCv = null;
 const FM = {
   wood: 0x9a7b52, woodDark: 0x7a5f3e, fabric: 0x93a7b1, fabricDark: 0x7b8f99,
   white: 0xf2f2ef, metal: 0xdadee2, dark: 0x3a3f45, glass: 0x9fc4dd, bedding: 0xdfe6e2,
