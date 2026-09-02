@@ -113,9 +113,15 @@ function currentWalkPose() {
 export function getWalkPose() { return walk ? currentWalkPose() : lastWalkPose; }
 export function isWalking() { return !!walk; }
 
+// 걷기 중엔 천장을 항상 보이게(안 하면 하늘이 뚫려 보임) — 종료 시 체크박스 상태로 원복
+function setCeilVisible(v) {
+  root.traverse(o => { if (o.userData?.isCeil) o.visible = v; });
+}
+
 export function enterWalk(cx, cz) {
   if (walk) return;
   walk = { keys: {}, yaw: 0, pitch: 0, last: performance.now() };
+  setCeilVisible(true);
   camera.position.set(cx, 1.5, cz);
   camera.fov = 70; camera.updateProjectionMatrix();   // 걷기 화각 — 실내 자연 시야(수직 70°)
   walk.yaw = Math.atan2(-(controls.target.x - cx), -(controls.target.z - cz));
@@ -132,6 +138,7 @@ export function exitWalk() {
   if (!walk) return;
   lastWalkPose = currentWalkPose();   // 멈춘 지점 저장 → 렌더샷 시점
   walk = null;
+  setCeilVisible(state.showCeiling);
   document.removeEventListener('mousemove', onWalkMouse);
   document.removeEventListener('keydown', onWalkKey, true);
   document.removeEventListener('keyup', onWalkKeyUp, true);
@@ -568,7 +575,7 @@ function buildRoom(r, g, allowRealLight) {
   ceil.material.transparent = true;
   ceil.material.opacity = 0.92;
   ceil.position.y = H;
-  ceil.visible = state.showCeiling;
+  ceil.visible = state.showCeiling || !!walk;   // 걷기 중 재빌드에도 천장 유지
   ceil.userData = { roomId: r.id, kind: 'ceiling', isCeil: true };
   g.add(ceil);
   // 조명 배치 그리드 — 조명 모드에서만 표시, 클릭 스냅 대상
@@ -588,7 +595,7 @@ function buildRoom(r, g, allowRealLight) {
     const bandW = isWell ? 0.35 : 0.30, bandH = isWell ? 0.12 : 0.18;
     const ip = insetRectPoly(bd, bandW);
     const addCeil = (mesh) => {
-      mesh.visible = state.showCeiling;
+      mesh.visible = state.showCeiling || !!walk;
       mesh.userData = { roomId: r.id, kind: 'ceiling', isCeil: true };
       g.add(mesh);
     };

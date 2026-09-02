@@ -347,6 +347,35 @@ export function buildDXFString() {
   text(mnX + 0.2, mnY - 0.95, 0.12, '개략 실측 — 시공 발주 전 정밀실측 필요 / iPhone LiDAR', '2-Tx_2_5', 0);
   EXT(mnX, mnY - 1.1);
 
+  // ── 0-Sheet: A3 도곽 + 표제란 (삶것 발행 표준 — 인쇄영역 (20,10)–(410,287)mm) ──────
+  {
+    const dw = mxX - mnX, dh = mxY - mnY;
+    // A3 가로 유효영역 390×277mm 안에 내용+여백 2m가 들어가는 최소 표준 축척
+    const scales = [50, 100, 150, 200, 250, 300, 400, 500];
+    const sc = scales.find(s2 => dw + 2 <= 0.390 * s2 && dh + 2.6 <= 0.277 * s2) || 500;
+    const W3 = 0.420 * sc, H3 = 0.297 * sc;
+    const x0 = (mnX + mxX) / 2 - W3 / 2, y0 = (mnY + mxY) / 2 - H3 / 2;
+    const rect = (a2, b2, c2, d2, L2) => {
+      line(a2, b2, c2, b2, L2); line(c2, b2, c2, d2, L2);
+      line(c2, d2, a2, d2, L2); line(a2, d2, a2, b2, L2);
+    };
+    rect(x0, y0, x0 + W3, y0 + H3, '0-Sheet');                          // 용지 외곽
+    const m3 = 0.010 * sc, mL = 0.020 * sc;                             // 여백 10mm, 좌측 철함 20mm
+    rect(x0 + mL, y0 + m3, x0 + W3 - m3, y0 + H3 - m3, '0-Sheet');      // 인쇄영역 테두리
+    const tw = 0.090 * sc, th = 0.035 * sc;                             // 표제란 90×35mm (우하단)
+    const tx0 = x0 + W3 - m3 - tw, ty0 = y0 + m3;
+    rect(tx0, ty0, tx0 + tw, ty0 + th, '0-Sheet');
+    line(tx0, ty0 + th * 0.62, tx0 + tw, ty0 + th * 0.62, '0-Sheet');
+    line(tx0, ty0 + th * 0.30, tx0 + tw, ty0 + th * 0.30, '0-Sheet');
+    line(tx0 + tw * 0.52, ty0, tx0 + tw * 0.52, ty0 + th * 0.30, '0-Sheet');
+    const t3 = (x2, y2, h2, s2) => text(x2, y2, h2, s2, '2-Tx_2_5', 0);
+    const today = new Date().toISOString().slice(0, 10);
+    t3(tx0 + 0.004 * sc, ty0 + th * 0.72, 0.005 * sc, (P.name || 'PlanShot') + ' 실측 평면도');
+    t3(tx0 + 0.004 * sc, ty0 + th * 0.38, 0.0035 * sc, (P.company || 'PlanShot') + ' · 개략실측(LiDAR)');
+    t3(tx0 + 0.004 * sc, ty0 + th * 0.08, 0.0035 * sc, 'SCALE 1:' + sc + ' (A3)');
+    t3(tx0 + tw * 0.56, ty0 + th * 0.08, 0.0035 * sc, today);
+  }
+
   g(0, 'SECTION'); g(2, 'HEADER');
   g(9, '$ACADVER'); g(1, 'AC1009');
   g(9, '$INSBASE'); g(10, '0'); g(20, '0'); g(30, '0');

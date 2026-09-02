@@ -10,7 +10,7 @@ export const state = {
   pendingLine: null,      // 라인조명 첫 클릭점 {x,z}
   showCeiling: false,
   showFurniture: true,
-  lightFX: false,     // 3D 실광원 효과(기본 꺼짐 — 재료 확인 모드)
+  lightFX: true,      // 3D 실광원 효과(기본 켬 — 끄면 밝고 균일한 재료 확인 모드)
   listeners: new Set(),
 };
 
