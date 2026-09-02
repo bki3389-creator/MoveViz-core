@@ -33,6 +33,25 @@ on(what => {
 });
 rebuild3D(); frameAll(); emit('init');
 
+// URL 파라미터 — 스크린샷/딥링크 검증용: ?sample(샘플 자동 로드) &tab=2d|3d &room=이름 &ceil=1
+(async () => {
+  const q = new URLSearchParams(location.search);
+  if (q.has('sample')) {
+    try {
+      const res = await fetch('./sample/sample_project.json');
+      loadJSONText(await res.text(), 'sample');
+      frameAll();
+    } catch {}
+  }
+  if (q.get('room')) {
+    const r = (state.project?.rooms || []).find(x => x.name === q.get('room'));
+    if (r) { state.selRoom = r.id; state.sel = { kind: 'room', roomId: r.id }; }
+  }
+  if (q.get('ceil') === '1') { state.showCeiling = true; $('chkCeil').checked = true; }
+  if (q.get('tab') === '2d' || q.get('tab') === '3d') setTab(q.get('tab'));
+  if (q.has('sample') || q.get('ceil') === '1') { rebuild3D(); emit('select'); }
+})();
+
 // ── 헤더 ──────────────────────────────────────
 $('projName').addEventListener('change', e => { state.project.name = e.target.value; emit('meta'); });
 $('btnSample').onclick = async () => {
