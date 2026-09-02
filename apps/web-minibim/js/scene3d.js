@@ -253,8 +253,13 @@ function wallCanvas(finishId, baseColor) {
     }
     g.globalAlpha = 1;
   } else if (SPEC.kind === 'weave') {
-    g.globalAlpha = 0.05; g.strokeStyle = shade(baseColor, 0.6); g.lineWidth = 1;
+    // 벽지: 직조 결 + 폭 1.06m 롤 이음선 — 재료가 '보이게'
+    g.globalAlpha = 0.10; g.strokeStyle = shade(baseColor, 0.62); g.lineWidth = 1;
     for (let x = 0; x < px; x += 3) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, px); g.stroke(); }
+    g.globalAlpha = 0.16; g.lineWidth = 1;
+    for (let y = 0; y < px; y += 4) { g.beginPath(); g.moveTo(0, y); g.lineTo(px, y); g.stroke(); }
+    g.globalAlpha = 0.22; g.strokeStyle = shade(baseColor, 0.5); g.lineWidth = 2;
+    g.beginPath(); g.moveTo(1, 0); g.lineTo(1, px); g.stroke();   // 롤 이음선(반복 경계)
     g.globalAlpha = 1;
   } else if (SPEC.kind === 'wood') {
     const rows = Math.round(SPEC.size / SPEC.plank);
@@ -966,10 +971,10 @@ export function clearHighlight() {
 }
 
 /// 자연 배경 파노라마(등장방형): 하늘 그라데이션 + 원경 수목 라인 + 잔디 지면
-let _natureTex = null;
-export function natureEquirect() {
-  if (_natureTex) return _natureTex;
-  const W = 4096, H2 = 2048, HOR = Math.round(H2 * 0.565);
+const _natureTexCache = new Map();
+export function natureEquirect(W = 4096) {
+  if (_natureTexCache.has(W)) return _natureTexCache.get(W);
+  const H2 = W / 2, HOR = Math.round(H2 * 0.565);
   const c = document.createElement('canvas'); c.width = W; c.height = H2;
   const g = c.getContext('2d');
   const sky = g.createLinearGradient(0, 0, 0, HOR);
@@ -991,10 +996,11 @@ export function natureEquirect() {
   const gr = g.createLinearGradient(0, HOR, 0, H2);
   gr.addColorStop(0, '#a3bd92'); gr.addColorStop(0.35, '#8dab7c'); gr.addColorStop(1, '#647f58');
   g.fillStyle = gr; g.fillRect(0, HOR, W, H2 - HOR);
-  _natureTex = new THREE.CanvasTexture(c);
-  _natureTex.mapping = THREE.EquirectangularReflectionMapping;
-  _natureTex.colorSpace = THREE.SRGBColorSpace;
-  return _natureTex;
+  const tex2 = new THREE.CanvasTexture(c);
+  tex2.mapping = THREE.EquirectangularReflectionMapping;
+  tex2.colorSpace = THREE.SRGBColorSpace;
+  _natureTexCache.set(W, tex2);
+  return tex2;
 }
 
 export function getSceneRefs() { return { scene, camera, renderer, root }; }

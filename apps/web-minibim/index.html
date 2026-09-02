@@ -70,6 +70,19 @@
 
   <aside id="right">
     <div class="panel-title">선택 · 유형/재료</div>
+    <div class="panel-title">AI 디자이너</div>
+    <div id="aiPanel">
+      <div id="aiShot" class="ai-shot" hidden><img id="aiShotImg" alt="시점 캡처"><button id="aiShotX" class="btn ghost">×</button></div>
+      <div id="aiLog" class="ai-log"><div class="ai-msg ai">걷기(🚶)로 원하는 자리에 서서 📍시점 캡처 → 원하는 분위기를 말해보세요. 제안을 원클릭으로 도면·견적에 적용합니다.</div></div>
+      <div class="ai-row">
+        <button id="aiCapture" class="btn ghost" title="현재 3D 시점(걷다 멈춘 화면)을 캡처해 대화에 첨부">📍 시점 캡처</button>
+        <button id="aiKey" class="btn ghost" title="Anthropic API 키 — 이 브라우저에만 저장">키 설정</button>
+      </div>
+      <div class="ai-row">
+        <textarea id="aiInput" rows="2" placeholder="예: 이 시점을 우드+베이지 미니멀로, 간접등 위주로 바꿔줘"></textarea>
+        <button id="aiSend" class="btn accent">보내기</button>
+      </div>
+    </div>
     <div id="inspector"></div>
     <div class="panel-title">견적 (실시간)</div>
     <div id="estSummary"></div>

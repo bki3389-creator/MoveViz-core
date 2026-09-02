@@ -44,7 +44,7 @@ export async function renderShot(root, camera, canvas, {
   renderer.toneMappingExposure = 1.1;
 
   // 방 지오메트리만 복제한 전용 씬 — GridHelper 등 헬퍼(LineSegments)는 패스트레이서가 못 다룸
-  const envTex = natureEquirect();   // 창밖 = 자연 (환경광에도 녹색·하늘빛 반사)
+  const envTex = natureEquirect(512);   // 패스트레이서 env는 소형(중요도 샘플링 CDF 비용 절감)
   const scene = new THREE.Scene();
   scene.background = envTex;
   scene.environment = envTex;
@@ -86,10 +86,11 @@ export async function renderShot(root, camera, canvas, {
   cam.updateProjectionMatrix();
 
   const pt = new WebGLPathTracer(renderer);
-  pt.bounces = 5;
+  pt.bounces = 4;
   pt.renderScale = 1;
-  pt.tiles.set(2, 2);
+  pt.tiles.set(3, 3);   // 프레임당 부하 분산 — UI 응답성
   try {
+    renderer.render(scene, cam);   // 셰이더 컴파일 동안 보일 래스터 미리보기 1프레임
     onProgress(0, samples, 'compile');
     await new Promise(r2 => setTimeout(r2, 60));   // 라벨 페인트 후 동기 컴파일(수 초~수십 초) 진입
     pt.setScene(scene, cam);   // 동기 BVH 빌드 — 세대 규모 씬이면 1초 미만 (setSceneAsync는 워커 필요)

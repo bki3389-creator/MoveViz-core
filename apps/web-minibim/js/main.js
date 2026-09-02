@@ -9,6 +9,7 @@ import * as stateMod from './state.js';
 import { init3D, rebuild3D, frameAll, clearHighlight, getSceneRefs, enterWalk, exitWalk, isWalking, getWalkPose } from './scene3d.js';
 import { renderEstimate, exportCSV, buildEstimate } from './estimate.js';
 import { exportDXF } from './dxf.js';
+import * as ai from './ai.js';
 import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS, FURN_ITEMS, furnKgOf, furnDisposalKg, ratesOf,
          WORK_ITEMS, workItem, workGrade, roomTypeOf, item, KRW, canonId, unitKo2 } from './catalog.js';
 
@@ -204,7 +205,7 @@ async function runRenderShot(sampleTarget = 220, w = 1120, h = 700, mode = 'auto
     width: w, height: h, samples: sampleTarget, camPose: pose,
     onProgress: (n, t, phase) => {
       $('shotProg').textContent = phase === 'compile'
-        ? '장면 컴파일 중… (GPU에 따라 최초 10~30초)'
+        ? '셰이더 컴파일 중… 최초 1회는 GPU/드라이버에 따라 10초~2분 걸립니다 (창을 그대로 두세요)'
         : `${pose ? '실내' : '전체'} 뷰 · 샘플 ${n}/${t} · ${Math.round((performance.now() - t0) / 1000)}s`;
     },
   });
@@ -291,6 +292,66 @@ function deleteSelected() {
   else if (s.kind === 'furniture') removeFurniture(r, s.furnIdx);
   else if (s.kind === 'wall' && /^[xz]\d+_\d+$/.test(s.wallKey)) removeInnerWall(r, s.wallKey);
 }
+
+// ── AI 디자이너 (대화형 에이전트) ─────────────────────────
+let aiImg = null;
+function aiAdd(role, text, changes) {
+  const log = $('aiLog');
+  const b = document.createElement('div');
+  b.className = 'ai-msg ' + role;
+  b.textContent = text;
+  log.appendChild(b);
+  if (changes && changes.length) {
+    const box = document.createElement('div');
+    box.className = 'ai-changes';
+    for (const ch of changes) {
+      const row2 = document.createElement('div'); row2.className = 'ai-chip';
+      const sp = document.createElement('span'); sp.textContent = ai.describeChange(ch);
+      const bt = document.createElement('button'); bt.textContent = '적용';
+      bt.onclick = () => { bt.textContent = ai.applyChange(ch) ? '✓' : '불가'; bt.disabled = true; };
+      row2.append(sp, bt); box.appendChild(row2);
+    }
+    const all = document.createElement('button');
+    all.className = 'btn'; all.textContent = '모두 적용';
+    all.onclick = () => {
+      let n = 0;
+      for (const ch of changes) if (ai.applyChange(ch)) n++;
+      all.textContent = '✓ ' + n + '건 적용됨'; all.disabled = true;
+      box.querySelectorAll('.ai-chip button').forEach(x => { x.disabled = true; });
+    };
+    box.appendChild(all);
+    log.appendChild(box);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+async function aiGo() {
+  const t = $('aiInput').value.trim(); if (!t) return;
+  aiAdd('me', t + (aiImg ? ' 📍' : ''));
+  $('aiInput').value = ''; $('aiSend').disabled = true; $('aiSend').textContent = '…';
+  try {
+    const { text, changes } = await ai.askDesigner(t, aiImg);
+    aiImg = null; $('aiShot').hidden = true;
+    aiAdd('ai', text || '(응답 없음)', changes);
+  } catch (err) {
+    aiAdd('ai', '⚠ ' + (err && err.message || err));
+  }
+  $('aiSend').disabled = false; $('aiSend').textContent = '보내기';
+}
+$('aiCapture').onclick = () => {
+  setTab('3d');
+  aiImg = ai.captureViewpoint();
+  $('aiShotImg').src = aiImg;
+  $('aiShot').hidden = false;
+};
+$('aiShotX').onclick = () => { aiImg = null; $('aiShot').hidden = true; };
+$('aiKey').onclick = () => {
+  const k = prompt('Anthropic API 키 (sk-ant-…) — 이 브라우저 localStorage에만 저장됩니다', ai.apiKey());
+  if (k != null) ai.setApiKey(k);
+};
+$('aiSend').onclick = () => aiGo();
+$('aiInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiGo(); }
+});
 
 // ── 좌측: 방 목록 ──────────────────────────────────
 function renderRooms() {
