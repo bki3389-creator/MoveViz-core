@@ -83,12 +83,20 @@ export async function renderShot(root, camera, canvas, {
   pt.renderScale = 1;
   pt.tiles.set(2, 2);
   try {
+    onProgress(0, samples, 'compile');
+    await new Promise(r2 => setTimeout(r2, 60));   // 라벨 페인트 후 동기 컴파일(수 초~수십 초) 진입
     pt.setScene(scene, cam);   // 동기 BVH 빌드 — 세대 규모 씬이면 1초 미만 (setSceneAsync는 워커 필요)
 
     await new Promise(resolve => {
       const loop = () => {
         if (stopFlag || pt.samples >= samples) { resolve(); return; }
-        pt.renderSample();
+        try {
+          pt.renderSample();
+        } catch (err2) {
+          console.error('렌더 루프 오류:', err2);
+          window.__shotErr = String(err2?.message || err2);
+          resolve(); return;
+        }
         onProgress(Math.floor(pt.samples), samples);
         requestAnimationFrame(loop);
       };
@@ -98,6 +106,7 @@ export async function renderShot(root, camera, canvas, {
     return url;
   } catch (err) {
     console.error('렌더샷 실패:', err);
+    window.__shotErr = String(err?.message || err);
     return null;
   } finally {
     pt.dispose?.();

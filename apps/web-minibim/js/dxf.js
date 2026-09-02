@@ -5,9 +5,10 @@
 import { state, layoutOffsets, wallsOf, wallCuts, metricsOf, bboxOf, doorGeom } from './state.js';
 import { item } from './catalog.js';
 
-export function exportDXF() {
+/// DXF 문자열 생성 (테스트/재사용용 — 다운로드는 exportDXF)
+export function buildDXFString() {
   const P = state.project;
-  if (!P?.rooms.length) return;
+  if (!P?.rooms.length) return null;
   const head = [], ents = [];
   const g = (c, v) => { head.push(String(c), String(v)); };
   const e = (c, v) => { ents.push(String(c), String(v)); };
@@ -36,6 +37,7 @@ export function exportDXF() {
   const text = (x, y, h, s, L, align = 1) => {
     if (!s) return;
     e(0, 'TEXT'); e(8, L); e(10, n(x)); e(20, n(y)); e(30, '0'); e(40, n(h)); e(1, uesc(s));
+    e(7, 'DOTUM');
     e(72, String(align)); e(11, n(x)); e(21, n(y)); e(31, '0'); e(73, '2');
   };
   const inPoly = (x, z, poly2) => {
@@ -114,18 +116,28 @@ export function exportDXF() {
             else line(X(w.pos + k), Y(o.lo), X(w.pos + k), Y(o.hi), 'A-GLAZ');
           }
         } else {
-          // 문: 방 안쪽으로 스윙 (2D와 동일 판정)
-          const dg = doorGeom(w, o, bd);   // flip(Space) 반영 — 화면과 동일 방향
-          const hx = dg.hx, hz = dg.hz;
-          const ax = dg.ax, az = dg.az, nx = dg.nx, nz = dg.nz;
-          const sgnP = dg.sgn;
-          // 평면 z+ 는 DXF Y− → 화면과 동일 모양이 되도록 Y 반전 반영
-          const lx = hx + nx * sgnP * o.w, lz = hz + nz * sgnP * o.w;
-          line(X(hx), Y(hz), X(lx), Y(lz), 'A-DOOR');                        // 문짝
-          const aStart = Math.atan2(Y(lz) - Y(hz), X(lx) - X(hx)) * 180 / Math.PI;
-          const aEnd = Math.atan2(Y(hz + az * 0) - Y(hz), X(hx + ax * o.w) - X(hx)) * 180 / Math.PI;
-          const [s0, s1] = ((aEnd - aStart + 360) % 360) <= 180 ? [aStart, aEnd] : [aEnd, aStart];
-          arc(X(hx), Y(hz), o.w, s0, s1, 'A-DOOR');
+          const dl = o.dm === 'glass' ? 'A-GLAZ' : 'A-DOOR';   // 유리문은 창호 레이어
+          if (o.dk === 'slide') {
+            // 미닫이: 패널 2장(겹침) — 호 없음
+            const pw2 = o.w * 0.55, noff = 0.035;
+            const seg = (t0p, t1p, k2) => {
+              if (w.dir === 'z') line(X(t0p), Y(w.pos + k2), X(t1p), Y(w.pos + k2), dl);
+              else line(X(w.pos + k2), Y(t0p), X(w.pos + k2), Y(t1p), dl);
+            };
+            seg(o.lo, o.lo + pw2, noff); seg(o.hi - pw2, o.hi, -noff);
+          } else {
+            // 여닫이: 방 안쪽 스윙 (2D와 동일 판정, flip 반영)
+            const dg = doorGeom(w, o, bd);
+            const hx = dg.hx, hz = dg.hz;
+            const ax = dg.ax, az = dg.az, nx = dg.nx, nz = dg.nz;
+            const sgnP = dg.sgn;
+            const lx = hx + nx * sgnP * o.w, lz = hz + nz * sgnP * o.w;
+            line(X(hx), Y(hz), X(lx), Y(lz), dl);                        // 문짝
+            const aStart = Math.atan2(Y(lz) - Y(hz), X(lx) - X(hx)) * 180 / Math.PI;
+            const aEnd = Math.atan2(Y(hz + az * 0) - Y(hz), X(hx + ax * o.w) - X(hx)) * 180 / Math.PI;
+            const [s0, s1] = ((aEnd - aStart + 360) % 360) <= 180 ? [aStart, aEnd] : [aEnd, aStart];
+            arc(X(hx), Y(hz), o.w, s0, s1, dl);
+          }
         }
       }
     }
@@ -139,6 +151,7 @@ export function exportDXF() {
 
     // ── 가구 + 라벨
     for (const f of r.plan.furniture || []) {
+      if (f.status === 'dispose') continue;   // 폐기 — 최종 도면에서 제외
       const cs = f.obb || f.polygon || [];
       if (cs.length < 3) continue;
       poly(cs.map(p => [X(p[0]), Y(p[1])]), 'A-FURN', true);
@@ -157,23 +170,51 @@ export function exportDXF() {
       }
     }
 
-    // ── 치수 (붙은 변 생략 — 2D와 동일 규칙)
+    // ── 치수: 모든 외곽 변 전장 + 개구부 위치 체인(방 안쪽) — 인테리어 실시도면 문법
     const adj = adjOf(r);
-    const dim = (x1, y1, x2, y2, out, label) => {
-      const o2 = 0.55;
+    const dim = (x1, y1, x2, y2, out, label, o2 = 0.55, h2 = 0.11) => {
       const A = [x1 + out[0] * o2, y1 + out[1] * o2], B = [x2 + out[0] * o2, y2 + out[1] * o2];
       line(x1 + out[0] * 0.06, y1 + out[1] * 0.06, A[0] + out[0] * 0.08, A[1] + out[1] * 0.08, 'A-ANNO-DIMS');
       line(x2 + out[0] * 0.06, y2 + out[1] * 0.06, B[0] + out[0] * 0.08, B[1] + out[1] * 0.08, 'A-ANNO-DIMS');
       line(A[0], A[1], B[0], B[1], 'A-ANNO-DIMS');
       for (const p2 of [A, B]) line(p2[0] - 0.05, p2[1] - 0.05, p2[0] + 0.05, p2[1] + 0.05, 'A-ANNO-DIMS');
-      text((A[0] + B[0]) / 2 + out[0] * 0.14, (A[1] + B[1]) / 2 + out[1] * 0.14, 0.11, label, 'A-ANNO-DIMS', 1);
+      text((A[0] + B[0]) / 2 + out[0] * 0.14, (A[1] + B[1]) / 2 + out[1] * 0.14, h2, label, 'A-ANNO-DIMS', 1);
     };
-    const wmm = Math.round((bb.maxX - bb.minX) * 1000).toLocaleString('en-US');
-    const dmm = Math.round((bb.maxZ - bb.minZ) * 1000).toLocaleString('en-US');
-    if (!adj.B || adj.T) dim(X(bb.minX), Y(bb.maxZ), X(bb.maxX), Y(bb.maxZ), [0, -1], wmm);
-    else dim(X(bb.minX), Y(bb.minZ), X(bb.maxX), Y(bb.minZ), [0, 1], wmm);
-    if (!adj.L || adj.R) dim(X(bb.minX), Y(bb.maxZ), X(bb.minX), Y(bb.minZ), [-1, 0], dmm);
-    else dim(X(bb.maxX), Y(bb.maxZ), X(bb.maxX), Y(bb.minZ), [1, 0], dmm);
+    const mm = v => Math.round(v * 1000).toLocaleString('en-US');
+    for (const w of wallsOf(r)) {
+      if (w.inner) continue;
+      const sharedLen = (w.shared || []).reduce((s2, sp) => s2 + sp.hi - sp.lo, 0);
+      const mid = (w.lo + w.hi) / 2;
+      // 평면(월드) 기준 바깥 방향 → DXF는 Y 반전
+      const outw = w.dir === 'z'
+        ? [0, inPoly(mid, w.pos + 0.08, bd) ? -1 : 1]
+        : [inPoly(w.pos + 0.08, mid, bd) ? -1 : 1, 0];
+      const outD = [outw[0], -outw[1]];
+      if (sharedLen < w.len * 0.6) {   // 이웃이 대부분 덮는 변은 그쪽 도면에서
+        if (w.dir === 'z') dim(X(w.lo), Y(w.pos), X(w.hi), Y(w.pos), outD, mm(w.len));
+        else dim(X(w.pos), Y(w.lo), X(w.pos), Y(w.hi), outD, mm(w.len));
+      }
+      // 개구부 체인: 벽끝→문/창 양끝→벽끝 (자기 소유만, 방 안쪽 작은 치수)
+      const own = w.openings.filter(o3 => !o3.foreign).sort((p2, q2) => p2.lo - q2.lo);
+      if (own.length) {
+        const st2 = [w.lo, ...own.flatMap(o3 => [o3.lo, o3.hi]), w.hi];
+        const inD = [-outD[0], -outD[1]];
+        for (let i2 = 0; i2 + 1 < st2.length; i2++) {
+          const A2 = st2[i2], B2 = st2[i2 + 1];
+          if (B2 - A2 < 0.08) continue;
+          if (w.dir === 'z') dim(X(A2), Y(w.pos), X(B2), Y(w.pos), inD, mm(B2 - A2), 0.38, 0.085);
+          else dim(X(w.pos), Y(A2), X(w.pos), Y(B2), inD, mm(B2 - A2), 0.38, 0.085);
+        }
+      }
+    }
+    // 비정형(L자 등) 방: 전체 폭/깊이를 한 단계 바깥에 추가
+    if ((r.plan.boundary || []).length > 4) {
+      const wmm = mm(bb.maxX - bb.minX), dmm = mm(bb.maxZ - bb.minZ);
+      if (!adj.B || adj.T) dim(X(bb.minX), Y(bb.maxZ), X(bb.maxX), Y(bb.maxZ), [0, -1], wmm, 1.05);
+      else dim(X(bb.minX), Y(bb.minZ), X(bb.maxX), Y(bb.minZ), [0, 1], wmm, 1.05);
+      if (!adj.L || adj.R) dim(X(bb.minX), Y(bb.maxZ), X(bb.minX), Y(bb.minZ), [-1, 0], dmm, 1.05);
+      else dim(X(bb.maxX), Y(bb.maxZ), X(bb.maxX), Y(bb.minZ), [1, 0], dmm, 1.05);
+    }
   }
 
   // ═══ 단면도 세트: 평면 아래에 방별 단면 + 벽-바닥 접합 상세 ═══
@@ -267,16 +308,23 @@ export function exportDXF() {
   g(0, 'TABLE'); g(2, 'LAYER'); g(70, String(layers.length));
   for (const [nm, c] of layers) { g(0, 'LAYER'); g(2, nm); g(70, '64'); g(62, String(c)); g(6, 'CONTINUOUS'); }
   g(0, 'ENDTAB');
-  g(0, 'TABLE'); g(2, 'STYLE'); g(70, '1');
-  g(0, 'STYLE'); g(2, 'STANDARD'); g(70, '0'); g(40, '0.0'); g(41, '1.0'); g(50, '0.0'); g(71, '0'); g(42, '2.5'); g(3, 'txt'); g(4, '');
+  g(0, 'TABLE'); g(2, 'STYLE'); g(70, '2');
+  g(0, 'STYLE'); g(2, 'STANDARD'); g(70, '0'); g(40, '0.0'); g(41, '1.0'); g(50, '0.0'); g(71, '0'); g(42, '2.5'); g(3, 'Dotum.ttc'); g(4, '');
+  g(0, 'STYLE'); g(2, 'DOTUM'); g(70, '0'); g(40, '0.0'); g(41, '1.0'); g(50, '0.0'); g(71, '0'); g(42, '2.5'); g(3, 'Dotum.ttc'); g(4, '');
   g(0, 'ENDTAB'); g(0, 'ENDSEC');
   g(0, 'SECTION'); g(2, 'BLOCKS'); g(0, 'ENDSEC');
   g(0, 'SECTION'); g(2, 'ENTITIES');
   const all = [...head, ...ents, '0', 'ENDSEC', '0', 'EOF'];
-  const blob = new Blob([all.join('\r\n') + '\r\n'], { type: 'application/dxf' });
+  return all.join('\r\n') + '\r\n';
+}
+
+export function exportDXF() {
+  const str = buildDXFString();
+  if (!str) return;
+  const blob = new Blob([str], { type: 'application/dxf' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = (P.name || 'minibim') + '_plan.dxf';
+  a.download = (state.project?.name || 'minibim') + '_plan.dxf';
   a.click();
   URL.revokeObjectURL(a.href);
 }

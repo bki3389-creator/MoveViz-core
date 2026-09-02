@@ -47,9 +47,9 @@ export const FINISH_CEIL = [
 
 export const CEIL_TYPES = [
   { id: 'ct_keep',     name: '기존 천장 유지',        spec: '-',                basis: 'area',      unit: 'm2', mat: 0,     lab: 0 },
-  { id: 'ct_flat',     name: '평천장 재시공',         spec: '목틀+석고 1P',      basis: 'area',      unit: 'm2', mat: 12000, lab: 30000 },
-  { id: 'ct_well',     name: '우물천장',              spec: '단내림·간접홈',     basis: 'area',      unit: 'm2', mat: 14000, lab: 34000 },
-  { id: 'ct_indirect', name: '간접등 박스(커튼박스)', spec: '둘레 목공',         basis: 'perimeter', unit: 'm',  mat: 18000, lab: 42000 },
+  { id: 'ct_flat',     name: '평천장 재시공',         spec: '하지틀(목/경량)+석고+마감 포함',      basis: 'area',      unit: 'm2', mat: 12000, lab: 30000 },
+  { id: 'ct_well',     name: '우물천장',              spec: '하지 단내림+간접홈 포함',     basis: 'area',      unit: 'm2', mat: 14000, lab: 34000 },
+  { id: 'ct_indirect', name: '간접등 박스(커튼박스)', spec: '둘레 목공 하지+박스 포함',         basis: 'perimeter', unit: 'm',  mat: 18000, lab: 42000 },
   { id: 'ct_nomold',   name: '무몰딩 마감',           spec: '마이너스/민몰딩',   basis: 'perimeter', unit: 'm',  mat: 6000,  lab: 18000 },
   { id: 'ct_exposed',  name: '노출천장',              spec: '철거+도장',         basis: 'area',      unit: 'm2', mat: 10000, lab: 40000 },
 ];
@@ -278,24 +278,31 @@ export const LEGACY_IDS = { fl_sheet: 'fl_sheet18' };
 export function canonId(id) { return LEGACY_IDS[id] || id; }
 
 // 가구 카탈로그 (배치용, m)
-export const FURN_ITEMS = [
-  { name: '침대 Q', category: 'bed', w: 1.5, d: 2.0 },
-  { name: '침대 SS', category: 'bed', w: 1.1, d: 2.0 },
-  { name: '소파 3인', category: 'sofa', w: 2.0, d: 0.9 },
-  { name: '소파 2인', category: 'sofa', w: 1.5, d: 0.9 },
-  { name: '식탁 4인', category: 'table', w: 1.2, d: 0.8 },
-  { name: '식탁 6인', category: 'table', w: 1.8, d: 0.9 },
-  { name: '책상 1200', category: 'table', w: 1.2, d: 0.6 },
-  { name: '의자', category: 'chair', w: 0.45, d: 0.5 },
-  { name: '옷장 1200', category: 'cabinet', w: 1.2, d: 0.6 },
-  { name: '붙박이장 2400', category: 'cabinet', w: 2.4, d: 0.6 },
-  { name: 'TV장 1800', category: 'cabinet', w: 1.8, d: 0.4 },
-  { name: '냉장고', category: 'refrigerator', w: 0.9, d: 0.8 },
-  { name: '세탁기', category: 'appliance', w: 0.6, d: 0.65 },
-  { name: '변기', category: 'toilet', w: 0.4, d: 0.7 },
-  { name: '세면대', category: 'sink', w: 0.6, d: 0.45 },
+export const FURN_ITEMS = [   // mat=구입/제작비, lab=설치·운반 (개략 시장가 — 신규/교체 시 견적 자동 반영)
+  { name: '침대 Q', category: 'bed', w: 1.5, d: 2.0, mat: 550000, lab: 50000 },
+  { name: '침대 SS', category: 'bed', w: 1.1, d: 2.0, mat: 400000, lab: 50000 },
+  { name: '소파 3인', category: 'sofa', w: 2.0, d: 0.9, mat: 750000, lab: 30000 },
+  { name: '소파 2인', category: 'sofa', w: 1.5, d: 0.9, mat: 550000, lab: 30000 },
+  { name: '식탁 4인', category: 'table', w: 1.2, d: 0.8, mat: 350000, lab: 30000 },
+  { name: '식탁 6인', category: 'table', w: 1.8, d: 0.9, mat: 550000, lab: 30000 },
+  { name: '책상 1200', category: 'table', w: 1.2, d: 0.6, mat: 180000, lab: 20000 },
+  { name: '의자', category: 'chair', w: 0.45, d: 0.5, mat: 60000, lab: 0 },
+  { name: '옷장 1200', category: 'cabinet', w: 1.2, d: 0.6, mat: 350000, lab: 60000 },
+  { name: '붙박이장 2400', category: 'cabinet', w: 2.4, d: 0.6, mat: 1600000, lab: 300000 },
+  { name: 'TV장 1800', category: 'cabinet', w: 1.8, d: 0.4, mat: 280000, lab: 30000 },
+  { name: '냉장고', category: 'refrigerator', w: 0.9, d: 0.8, mat: 1400000, lab: 30000 },
+  { name: '세탁기', category: 'appliance', w: 0.6, d: 0.65, mat: 800000, lab: 40000 },
+  { name: '변기', category: 'toilet', w: 0.4, d: 0.7 },        // 가격은 욕실 공사항목(w_toilet)에서
+  { name: '세면대', category: 'sink', w: 0.6, d: 0.45 },       // w_basin
   { name: '욕조 1500', category: 'bathtub', w: 1.5, d: 0.75 },
 ];
+
+/// 가구 구입/제작 단가 — 이름 정확 일치 우선, 없으면 같은 카테고리 첫 유가 항목
+export function furnPriceOf(f) {
+  const it = FURN_ITEMS.find(x => x.name === (f.category_ko || '')) ||
+             FURN_ITEMS.find(x => x.category === f.category && x.mat != null);
+  return it && it.mat != null ? { name: it.name, m: it.mat, l: it.lab || 0 } : null;
+}
 
 // ── 가구 추정 무게 (철거·반출 산정용): category → [기본 kg, 기준 바닥면적 ㎡] ──
 export const FURN_KG = {
@@ -307,4 +314,19 @@ export function furnKgOf(cat, w, d) {
   const [base, typA] = FURN_KG[cat] || [25, 0.8];
   const k = typA ? Math.max(0.4, Math.min(2.5, (w * d) / typA)) : 1;   // 크기 비례(0.4~2.5배)
   return Math.round(base * k);
+}
+
+/// 반출 대상 무게(kg): 폐기 지정 가구 + 교체된 기존 가구
+export function furnDisposalKg(furniture) {
+  let kg = 0;
+  for (const f of furniture || []) {
+    const cs = f.obb || f.polygon || [];
+    if (f.status === 'dispose' && cs.length >= 4) {
+      const w = Math.hypot(cs[1][0] - cs[0][0], cs[1][1] - cs[0][1]);
+      const d = Math.hypot(cs[3][0] - cs[0][0], cs[3][1] - cs[0][1]);
+      kg += furnKgOf(f.category, w, d);
+    }
+    if (f.replaced?.kg) kg += f.replaced.kg;
+  }
+  return kg;
 }

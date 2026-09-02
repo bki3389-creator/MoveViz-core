@@ -23,6 +23,7 @@ export function newProject(name = '새 현장') {
 
 /// doors/interior_openings 를 openings 로 합쳐 편집 대상을 단일 배열로.
 export function normalizePlan(plan) {
+  for (const f of plan.furniture || []) if (f.existing === undefined) f.existing = true;   // 스캔 유래 = 기존 가구
   const extra = [...(plan.interior_openings || []), ...(plan.doors || [])];
   if (extra.length) {
     plan.openings = [...(plan.openings || []), ...extra.map(o => ({ ...o, type: o.type || 'door' }))];
@@ -152,7 +153,8 @@ export function wallsOf(r) {
       const h = op.height ?? (isWin ? 1.2 : 2.1);
       if (foreign && wall.openings.some(x => !x.foreign && x.lo < hi && x.hi > lo)) continue;  // 자체 개구부와 겹치면 생략
       wall.openings.push({ type: isWin ? 'window' : 'door', lo, hi, w: hi - lo,
-                           h: Math.min(h, H - 0.05), idx: oi, foreign });
+                           h: Math.min(h, H - 0.05), idx: oi, foreign,
+                           flip: op.flip, dk: op.dk, dm: op.dm });
     }
     wall.openings.sort((p, q) => p.lo - q.lo);
     wall.grossArea = wall.len * H;
@@ -237,9 +239,10 @@ export function metricsOf(r) {
   const per = boundary ? polyPerimeter(boundary) : polys.reduce((s, p) => s + polyPerimeter(p), 0);
   const walls = wallsOf(r);
   const outer = walls.filter(w => !w.inner);
-  let doorW = 0, doors = 0, windows = 0, openA = 0, winArea = 0;
+  let doorW = 0, doors = 0, windows = 0, openA = 0, winArea = 0, doorWAll = 0;
   for (const w of outer) for (const o of w.openings) {
     openA += o.w * o.h;
+    if (o.type === 'door') doorWAll += o.w;   // 걸레받이 공제: 소유 무관 — 구멍엔 걸레받이 없음
     if (o.foreign) continue;   // 상대 방 소유 — 개수는 그쪽에서
     if (o.type === 'door') { doors++; doorW += o.w; }
     else { windows++; winArea += o.w * o.h; }
@@ -248,7 +251,7 @@ export function metricsOf(r) {
   const bb = bboxOf(plan) || { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
   return {
     area, per, H, wallNet, doors, windows, doorW, winArea,
-    baseboard: Math.max(0, per - doorW), molding: per,
+    baseboard: Math.max(0, per - doorWAll), molding: per,
     w: bb.maxX - bb.minX, d: bb.maxZ - bb.minZ,
     pyeong: area * 0.3025,
   };
@@ -515,6 +518,61 @@ export function moveWall(r, wallKey, newPos, silent) {
   return false;
 }
 
+/// 조명 배치 그리드 — 실 크기에 따라 간격 자동(목표 1.1m), 셀 중심 정렬. L자는 경계 안쪽만.
+export function lightGridOf(r) {
+  const bb = bboxOf(r.plan); if (!bb) return [];
+  const w = bb.maxX - bb.minX, d = bb.maxZ - bb.minZ;
+  const nx = Math.max(1, Math.round(w / 1.1)), nz = Math.max(1, Math.round(d / 1.1));
+  const bd = r.plan.boundary || [];
+  const pts = [];
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+    const x = bb.minX + w * (i + 0.5) / nx, z = bb.minZ + d * (j + 0.5) / nz;
+    if (!bd.length || pointInPoly(x, z, bd)) pts.push([x, z]);
+  }
+  return pts;
+}
+
+/// 벽 분할(원본 미니빔 split 이식): 외곽 변에 점 2개 삽입(클릭점 ±0.45m)
+/// → 가운데 조각(b<i+1>)을 선택해 법선으로 드래그하면 단(notch)이 된다.
+/// 반환: 가운데 조각 변 인덱스, 실패 시 -1. ⚠ 분할 뒤 그 방 b키가 +2 밀림(벽별 지정 마감 주의).
+export function splitWall(r, wallKey, t) {
+  const m2 = wallKey.match(/^b(\d+)$/); if (!m2) return -1;
+  const bd = r.plan.boundary; if (!bd || bd.length < 3) return -1;
+  const i = +m2[1];
+  const a = bd[i], b = bd[(i + 1) % bd.length]; if (!a || !b) return -1;
+  const horiz = Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]);
+  const lo = horiz ? Math.min(a[0], b[0]) : Math.min(a[1], b[1]);
+  const hi = horiz ? Math.max(a[0], b[0]) : Math.max(a[1], b[1]);
+  const c0 = snap(Math.max(lo + 0.15, t - 0.45));
+  const c1 = snap(Math.min(hi - 0.15, t + 0.45));
+  if (c1 - c0 < 0.2) return -1;
+  pushHistory(r);
+  const fwd = (horiz ? b[0] - a[0] : b[1] - a[1]) >= 0;
+  const [t0, t1] = fwd ? [c0, c1] : [c1, c0];
+  const mk = tv => horiz ? [tv, a[1]] : [a[0], tv];
+  // 원본 미니빔 방식: A—C—C'—D'—D—B (C'=C, D'=D 로 시작) — 가운데 C'—D' 조각을
+  // 법선으로 끌면 C—C', D'—D 가 수직 연결 스텁이 되어 단(notch)이 만들어진다.
+  bd.splice(i + 1, 0, mk(t0), mk(t0), mk(t1), mk(t1));
+  syncRoomPolys(r);
+  emit('project');
+  return i + 2;
+}
+
+/// 선택 벽 끝단 그립: 꼭짓점 이동 — 이웃 변이 수평/수직이면 그 축을 따라와 직교 유지.
+export function moveCorner(r, vi, nx2, nz2, silent) {
+  const bd = r.plan.boundary; if (!bd || !bd[vi]) return;
+  const N = bd.length;
+  const p = bd[(vi - 1 + N) % N], c = bd[vi], q = bd[(vi + 1) % N];
+  const ox = snap(nx2), oz = snap(nz2);
+  if (Math.abs(p[1] - c[1]) < 1e-6 && Math.abs(p[0] - c[0]) > 1e-6) p[1] = oz;
+  else if (Math.abs(p[0] - c[0]) < 1e-6 && Math.abs(p[1] - c[1]) > 1e-6) p[0] = ox;
+  if (Math.abs(q[1] - c[1]) < 1e-6 && Math.abs(q[0] - c[0]) > 1e-6) q[1] = oz;
+  else if (Math.abs(q[0] - c[0]) < 1e-6 && Math.abs(q[1] - c[1]) > 1e-6) q[0] = ox;
+  c[0] = ox; c[1] = oz;
+  syncRoomPolys(r);
+  if (!silent) emit('project');
+}
+
 /// 레이저 보정(웹판): 바운딩 가로/세로를 목표(m)로 축별 스케일 — plan 좌표를 직접 변환.
 export function scaleRoom(r, targetW, targetD) {
   const bb = bboxOf(r.plan); if (!bb) return;
@@ -557,7 +615,7 @@ export function addFurniture(r, category, nameKo, w, d, cx, cz) {
   const hw = w / 2, hd = d / 2;
   r.plan.furniture.push({
     obb: [[cx - hw, cz - hd], [cx + hw, cz - hd], [cx + hw, cz + hd], [cx - hw, cz + hd]],
-    category, category_ko: nameKo, yaw_deg: 0,
+    category, category_ko: nameKo, yaw_deg: 0, existing: false,
   });
   emit('project');
   return r.plan.furniture.length - 1;
@@ -591,6 +649,34 @@ export function removeFurniture(r, idx) {
 }
 
 /// 가구 치수 변경 — 중심과 yaw 유지한 채 obb 재구성.
+/// 기존 가구 처리: 'keep'(유지) | 'dispose'(폐기 — 최종 도면·3D·인쇄에서 제외, 반출 톤에 합산)
+export function setFurnStatus(r, idx, status) {
+  const f = r.plan.furniture[idx]; if (!f) return;
+  pushHistory(r);
+  if (status === 'keep') delete f.status; else f.status = status;
+  emit('project');
+}
+
+/// 같은 자리(중심·회전 유지) 다른 가구로 교체 — 기존 가구는 replaced 에 기록되어 반출 무게에 합산
+export function replaceFurniture(r, idx, spec) {   // spec: {category, name, w, d, oldKg}
+  const f = r.plan.furniture[idx]; if (!f) return;
+  pushHistory(r);
+  const cs = f.obb || f.polygon; if (!cs || cs.length < 3) return;
+  const cx = cs.reduce((a, p) => a + p[0], 0) / cs.length;
+  const cz = cs.reduce((a, p) => a + p[1], 0) / cs.length;
+  if (f.existing !== false && !f.replaced) {
+    f.replaced = { name: f.category_ko || f.category, category: f.category, kg: spec.oldKg || 0 };
+  }
+  f.category = spec.category; f.category_ko = spec.name;
+  delete f.status;
+  const yaw = (f.yaw_deg || 0) * Math.PI / 180, ca = Math.cos(yaw), sa = Math.sin(yaw);
+  const hw = spec.w / 2, hd = spec.d / 2;
+  const obb = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([a, b]) =>
+    [cx + a * ca - b * sa, cz + a * sa + b * ca]);
+  if (f.obb) f.obb = obb; else f.polygon = obb;
+  emit('project');
+}
+
 export function resizeFurniture(r, idx, w, d) {
   const f = r.plan.furniture[idx]; if (!f) return;
   pushHistory(r);

@@ -2,7 +2,7 @@
 // RhinoBIM `bq`(물량 CSV)의 웹판: 모델을 바꾸면 즉시 재계산된다.
 
 import { state, emit, metricsOf, wallsOf } from './state.js';
-import { item, ratesOf, KRW, CEIL_TYPES, canonId, crewOf, DAY_RATES } from './catalog.js';
+import { item, ratesOf, KRW, CEIL_TYPES, canonId, crewOf, DAY_RATES, furnDisposalKg, furnPriceOf } from './catalog.js';
 
 const isWet = name => /욕실|화장실|발코니|베란다/.test(name || '');
 
@@ -58,6 +58,25 @@ export function buildEstimate() {
     for (const [id, L] of Object.entries(len)) push('조명', id, L);
     // 추가 공사 (창호·문·주방·욕실·전기·설비)
     for (const ex of r.extras || []) push('추가공사', ex.id, ex.qty, '수동 입력');
+
+    // 가구 — 신규/교체 가구 구입·설치 자동 반영 (스캔된 기존 가구 제외)
+    for (const f of r.plan.furniture || []) {
+      if (f.status === 'dispose') continue;
+      if (!(f.existing === false || f.replaced)) continue;
+      const pr = furnPriceOf(f);
+      if (!pr) continue;
+      const fid = 'furn:' + pr.name;
+      const ov = P.rates?.[fid];
+      const rm2 = ov?.m ?? pr.m, rl2 = ov?.l ?? pr.l;
+      rows.push({ roomName: r.name, cat: '가구', id: fid, name: pr.name + ' 구입·설치',
+                  spec: f.replaced ? '교체' : '신규', unit: 'ea', qty: 1,
+                  m: rm2, l: rl2, rate: rm2 + rl2, amountM: rm2, amountL: rl2, amount: rm2 + rl2,
+                  note: f.replaced ? '기존 ' + f.replaced.name + ' 반출' : '가구 추가' });
+    }
+    // 가구 반출·폐기 — 폐기/교체 지정 시 자동 (수동 입력 있으면 중복 방지)
+    const dispTon = Math.round(furnDisposalKg(r.plan.furniture) / 100) / 10;
+    const manualOut = (r.extras || []).some(ex => String(ex.id).startsWith('w_furnout'));
+    if (dispTon > 0 && !manualOut) push('철거·반출', 'w_furnout#1', dispTon, '자동(폐기·교체 가구)');
   }
 
   const sub = rows.reduce((s, x) => s + x.amount, 0);
@@ -140,18 +159,39 @@ export function renderEstimate(elSummary, elTable) {
 function unitKo(u) { return { m2: '㎡', m: 'm', ea: '개', sik: '식', ton: '톤' }[u] || u; }
 
 export function exportCSV() {
-  const { rows, sub, subM, subL, vat, total } = buildEstimate();
-  const lines = [['실', '공종', '품명', '규격', '단위', '수량',
-                  '재료비 단가', '재료비 금액', '노무비 단가', '노무비 금액', '합계', '비고']];
+  const { rows, sub, subM, subL, vat, total, laborDays, demoTons } = buildEstimate();
+  const d2 = new Date();
+  const dateStr = `${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, '0')}-${String(d2.getDate()).padStart(2, '0')}`;
+  const lines = [];
+  lines.push([`${state.project?.name || '미니빔'} — 인테리어 견적서`]);
+  lines.push([state.project?.company || '', '', '', '', '', '', '', '', '', '', '작성일', dateStr]);
+  lines.push([]);
+  lines.push(['실', '공종', '품명', '규격', '단위', '수량',
+              '재료 단가', '재료 금액', '노무 단가', '노무 금액', '합계', '비고']);
+  let curRoom = null, rm = 0, rl = 0, rt = 0;
+  const flushRoom = () => {
+    if (curRoom === null) return;
+    lines.push([`${curRoom} 소계`, '', '', '', '', '', '', Math.round(rm), '', Math.round(rl), Math.round(rt), '']);
+    lines.push([]);
+    rm = rl = rt = 0;
+  };
   for (const x of rows) {
-    lines.push([x.roomName, x.cat, x.name, x.spec, unitKo(x.unit),
-                x.unit === 'ea' ? Math.round(x.qty) : x.qty.toFixed(2),
+    if (x.roomName !== curRoom) { flushRoom(); curRoom = x.roomName; lines.push([`■ ${curRoom}`]); }
+    lines.push(['', x.cat, x.name, x.spec, unitKo(x.unit),
+                x.unit === 'ea' ? Math.round(x.qty) : Number(x.qty.toFixed(2)),
                 x.m, Math.round(x.amountM), x.l, Math.round(x.amountL), Math.round(x.amount), x.note || '실측 자동']);
+    rm += x.amountM; rl += x.amountL; rt += x.amount;
   }
-  lines.push([], ['소계', '', '', '', '', '', '', Math.round(subM), '', Math.round(subL), Math.round(sub), ''],
-             ['부가세', '', '', '', '', '', '', '', '', '', Math.round(vat), '별도 표기'],
-             ['총계', '', '', '', '', '', '', '', '', '', Math.round(total), ''],
-             [], ['개략 실측 - 시공 발주 전 정밀실측 필요 · 단가=참고값(재료/노무 분리)']);
+  flushRoom();
+  lines.push(['합계', '', '', '', '', '', '재료비', Math.round(subM), '노무비', Math.round(subL), Math.round(sub), '']);
+  lines.push(['부가세 10%', '', '', '', '', '', '', '', '', '', Math.round(vat), '별도 표기']);
+  lines.push(['총계(VAT 포함)', '', '', '', '', '', '', '', '', '', Math.round(total), '']);
+  lines.push([]);
+  if (laborDays?.length) {
+    lines.push(['노무 품 환산(참고)', laborDays.map(x2 => `${x2.crew} ${x2.days.toFixed(1)}품`).join(' · ')]);
+  }
+  if (demoTons) lines.push(['철거 폐기물 추정', `${demoTons}톤 (2.5톤 차량 ${Math.ceil(demoTons / 2.5)}대분)`]);
+  lines.push(['개략 실측 - 시공 발주 전 정밀실측 필요 · 단가=참고값(재료/노무 분리)']);
   const csv = '\uFEFF' + lines.map(l => l.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
