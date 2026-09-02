@@ -295,16 +295,22 @@ function renderInspector() {
     el.appendChild(tip('2D에서 드래그로 이동합니다.'));
   } else if (s?.kind === 'wall' && s.roomId === r.id) {
     const w = wallsOf(r).find(x => x.key === s.wallKey);
-    head.innerHTML = `<b>${esc(r.name)} · ${w?.inner ? '내부 벽' : '외곽 벽'} ${s.wallKey}</b>
+    const wallKindLabel = w?.inner ? '실내 가벽' : (w?.isExterior ? '🧱 외벽(외기)' : '내벽(세대 내)');
+    head.innerHTML = `<b>${esc(r.name)} · ${wallKindLabel} ${s.wallKey}</b>
       <span>길이 ${w ? mmOf(w.len).toLocaleString() : '?'}mm · 순면적 ${w ? w.netArea.toFixed(1) : '?'}㎡ · 개구부 ${w?.openings.length ?? 0}</span>`;
     el.appendChild(head);
     el.appendChild(sel('이 벽 마감(개별)', FINISH_WALL, r.wallOverrides[s.wallKey] || '',
       v => { if (v) r.wallOverrides[s.wallKey] = v; else delete r.wallOverrides[s.wallKey]; emit('project'); },
       [{ id: '', name: '기본과 동일' }]));
     el.appendChild(sel('벽체 유형', WALL_TYPES, r.wallTypes[s.wallKey] || 'wt_keep', v => {
+      if (v === 'wt_demo' && w?.isExterior
+          && !confirm('⚠️ 외벽(외기 접함)입니다. 인테리어 공사에서 외벽/구조벽 철거는 불가합니다.\n그래도 철거로 표시할까요?')) {
+        emit('select'); return;   // 셀렉트 되돌림
+      }
       if (v === 'wt_keep') delete r.wallTypes[s.wallKey]; else r.wallTypes[s.wallKey] = v;
       emit('project');
     }));
+    if (w?.isExterior) el.appendChild(tip('외벽 — 샷시/창호 교체는 "추가 공사 > 창호"로. 철거·이동 불가.'));
     if (w?.inner) el.appendChild(btn('가벽 삭제 (Del)', 'danger', () => removeInnerWall(r, s.wallKey)));
     el.appendChild(tip('2D에서 벽을 드래그하면 위치가 이동합니다(개구부 동반).'));
   } else if (s?.kind === 'light' && s.roomId === r.id) {

@@ -2,7 +2,7 @@
 // 인터랙션 수식은 아키톤 FloorPlanEditor에서 이식: 개구부 배치 = snap(t·L − w/2) + 양끝 클램프,
 // 슬라이드 = 내적 투영, 벽 드래그 = 법선 방향 이동. 인쇄용 방별 렌더(renderRoomImage) 포함.
 
-import { state, emit, layoutOffsets, wallsOf, metricsOf, room, snap,
+import { state, emit, layoutOffsets, wallsOf, wallSolidPieces, metricsOf, room, snap,
          addOpening, slideOpening, addInnerWall, moveWall, moveFurniture, pushHistory,
          moveRoomBy, snapRoomPos } from './state.js';
 import { item } from './catalog.js';
@@ -161,14 +161,11 @@ function paintRoom(g, r, off, P, s, th, interactive) {
   for (const w of wallsOf(r)) {
     const selWall = sel?.kind === 'wall' && sel.roomId === r.id && sel.wallKey === w.key;
     const hovered = interactive && hoverWall && hoverWall.roomId === r.id && hoverWall.key === w.key;
-    const t = Math.max(3, (w.inner ? 0.10 : 0.15) * s);
-    const pieces = [];
-    let cursor = w.lo;
-    for (const o of w.openings) { if (o.lo > cursor) pieces.push([cursor, o.lo]); cursor = Math.max(cursor, o.hi); }
-    if (cursor < w.hi) pieces.push([cursor, w.hi]);
-    if (!w.openings.length) { pieces.length = 0; pieces.push([w.lo, w.hi]); }
+    const bandM = w.inner ? 0.10 : (w.isExterior ? 0.20 : 0.15);   // 외벽 두껍게(도면 관례)
+    const t = Math.max(3, bandM * s);
+    const pieces = wallSolidPieces(w);
     g.lineCap = 'butt';
-    const halfM = (w.inner ? 0.10 : 0.15) / 2;   // 코너 채움용 반두께(m)
+    const halfM = bandM / 2;   // 코너 채움용 반두께(m)
     const ext = pieces.map(([a0, b0]) => [
       Math.abs(a0 - w.lo) < 1e-9 ? a0 - halfM : a0,     // 벽 끝단 = 코너 → 연장
       Math.abs(b0 - w.hi) < 1e-9 ? b0 + halfM : b0,

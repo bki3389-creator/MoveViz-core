@@ -3,7 +3,7 @@
 
 import * as THREE from '../vendor/three.module.js';
 import { OrbitControls } from '../vendor/addons/controls/OrbitControls.js';
-import { state, emit, layoutOffsets, wallsOf, ceilH, addLight, room } from './state.js';
+import { state, emit, layoutOffsets, wallsOf, wallCuts, ceilH, addLight, room } from './state.js';
 import { item, rateOf, FINISH_WALL } from './catalog.js';
 
 let renderer, scene, camera, controls, root, raycaster, container;
@@ -342,28 +342,33 @@ function buildRoom(r, g, allowRealLight) {
     }
   }
 
-  // 벽 — 세그먼트·개구부 컷
-  const wallT = 0.12;
+  // 벽 — 세그먼트·개구부 컷 (외벽은 두껍게)
   for (const w of wallsOf(r)) {
+    const wallT = w.inner ? 0.1 : (w.isExterior ? 0.18 : 0.12);
     const finish = r.wallOverrides?.[w.key] || r.wallFinish;
     const col = finishColor(finish, 0xdedad2);
     const demo = r.wallTypes?.[w.key] === 'wt_demo';
     const boxes = [];   // {lo, hi, y0, y1}
+    const cutsAll = wallCuts(w);
     let cursor = w.lo;
-    for (const o of w.openings) {
-      if (o.lo > cursor + 0.01) boxes.push({ lo: cursor, hi: o.lo, y0: 0, y1: H });
-      if (o.type === 'door') {
-        boxes.push({ lo: o.lo, hi: o.hi, y0: o.h, y1: H });                       // 인방
-      } else {
-        const sill = Math.max(0.1, (H - o.h) * 0.55);                              // 창대 높이 근사
-        boxes.push({ lo: o.lo, hi: o.hi, y0: 0, y1: sill });
-        boxes.push({ lo: o.lo, hi: o.hi, y0: Math.min(H, sill + o.h), y1: H });
-        if (!o.foreign) boxes.push({ lo: o.lo, hi: o.hi, y0: sill, y1: sill + o.h, glass: true }); // 유리(소유 방만)
+    for (const c of cutsAll) {
+      if (c.lo > cursor + 0.01) boxes.push({ lo: cursor, hi: c.lo, y0: 0, y1: H });
+      const o = c.o;
+      if (o) {
+        if (o.type === 'door') {
+          boxes.push({ lo: o.lo, hi: o.hi, y0: o.h, y1: H });                       // 인방
+        } else {
+          const sill = Math.max(0.1, (H - o.h) * 0.55);                              // 창대 높이 근사
+          boxes.push({ lo: o.lo, hi: o.hi, y0: 0, y1: sill });
+          boxes.push({ lo: o.lo, hi: o.hi, y0: Math.min(H, sill + o.h), y1: H });
+          if (!o.foreign) boxes.push({ lo: o.lo, hi: o.hi, y0: sill, y1: sill + o.h, glass: true });
+        }
       }
-      cursor = Math.max(cursor, o.hi);
+      // c.shared → 앞선 방이 그리는 구간: 아무것도 안 그림
+      cursor = Math.max(cursor, c.hi);
     }
     if (cursor < w.hi - 0.01) boxes.push({ lo: cursor, hi: w.hi, y0: 0, y1: H });
-    if (!w.openings.length) { boxes.length = 0; boxes.push({ lo: w.lo, hi: w.hi, y0: 0, y1: H }); }
+    if (!cutsAll.length) { boxes.length = 0; boxes.push({ lo: w.lo, hi: w.hi, y0: 0, y1: H }); }
 
     for (const b of boxes) {
       const len = b.hi - b.lo, hgt = b.y1 - b.y0;
@@ -571,10 +576,13 @@ function setHighlight(mesh) {
   const ud = mesh.userData || {};
   // 벽은 개구부 때문에 여러 조각 — 같은 wallKey 조각 전체를 한 부재로 하이라이트
   const targets = [];
-  if (ud.kind === 'wall' && ud.wallKey != null) {
+  if ((ud.kind === 'wall' && ud.wallKey != null) || (ud.kind === 'furniture' && ud.furnIdx != null)
+      || (ud.kind === 'light' && ud.lightId != null)) {
+    // 여러 조각(벽 세그먼트·가구 부품·조명 픽스처)을 한 부재로 통합 하이라이트
     root.traverse(obj => {
       const u = obj.userData || {};
-      if (u.kind === 'wall' && u.roomId === ud.roomId && u.wallKey === ud.wallKey
+      if (u.kind === ud.kind && u.roomId === ud.roomId && u.wallKey === ud.wallKey
+          && u.furnIdx === ud.furnIdx && u.lightId === ud.lightId
           && obj.material?.emissive) targets.push(obj);
     });
   } else if (mesh.material?.emissive) {

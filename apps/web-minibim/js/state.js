@@ -88,6 +88,15 @@ export function polyPerimeter(poly) {
   return s;
 }
 
+export function pointInPoly(x, z, poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1] + 1e-12) + a[0]) c = !c;
+  }
+  return c;
+}
+
 export function ceilH(plan) {
   const h = (plan.ceil_y ?? 2.4) - (plan.floor_y ?? 0);
   return (h > 1.8 && h < 4.5) ? h : 2.4;
@@ -148,6 +157,65 @@ export function wallsOf(r) {
     wall.openings.sort((p, q) => p.lo - q.lo);
     wall.grossArea = wall.len * H;
     wall.netArea = Math.max(0, wall.grossArea - wall.openings.reduce((s, o) => s + o.w * o.h, 0));
+  }
+
+  // 겹침 벽 시각 중복 제거: 프로젝트에서 나보다 앞선 방의 외곽 벽과 같은 선상(0.25m)·
+  // 겹치는 구간은 그 방이 그린다 → 내 벽엔 shared 스팬으로 표시(렌더에서 건너뜀).
+  // ⚠️ 수량(도배 순면적)은 방별 그대로 — 시각 전용.
+  if (state.project && r.pos) {
+    const myIdx = state.project.rooms.findIndex(x => x.id === r.id);
+    for (let pi = 0; pi < myIdx; pi++) {
+      const other = state.project.rooms[pi];
+      if (!other?.pos) continue;
+      const obd = other.plan?.boundary || [];
+      for (let i = 0; i < obd.length; i++) {
+        const a = obd[i], b = obd[(i + 1) % obd.length];
+        if (!a || !b || (a[0] === b[0] && a[1] === b[1])) continue;
+        const dir = Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]) ? 'z' : 'x';
+        const dx = other.pos.x - r.pos.x, dz = other.pos.z - r.pos.z;
+        const pos = dir === 'z' ? (a[1] + b[1]) / 2 + dz : (a[0] + b[0]) / 2 + dx;
+        const lo2 = dir === 'z' ? Math.min(a[0], b[0]) + dx : Math.min(a[1], b[1]) + dz;
+        const hi2 = dir === 'z' ? Math.max(a[0], b[0]) + dx : Math.max(a[1], b[1]) + dz;
+        for (const wall of walls) {
+          if (wall.inner || wall.dir !== dir) continue;
+          if (Math.abs(wall.pos - pos) > 0.25) continue;
+          const l = Math.max(wall.lo, lo2), h = Math.min(wall.hi, hi2);
+          if (h - l > 0.05) { (wall.shared || (wall.shared = [])).push({ lo: l, hi: h }); }
+        }
+      }
+    }
+    for (const wall of walls) wall.shared?.sort((p, q) => p.lo - q.lo);
+
+    // 외벽/내벽 판정: 벽 구간 바깥쪽 점이 어떤 실 폴리곤 안에도 없으면 외벽(외기 접함).
+    // 공유 스팬(다른 방과 맞댐) = 내벽. 인테리어에선 외벽 철거 불가 — UI 경고에 사용.
+    const worldPolys = state.project.rooms
+      .filter(x => x.pos && x.plan?.boundary?.length >= 3)
+      .map(x => x.plan.boundary.map(p2 => [p2[0] + x.pos.x, p2[1] + x.pos.z]));
+    for (const wall of walls) {
+      if (wall.inner) { wall.isExterior = false; continue; }
+      const nx = wall.dir === 'z' ? 0 : 1, nz = wall.dir === 'z' ? 1 : 0;
+      const midT = (wall.lo + wall.hi) / 2;
+      const mx = wall.dir === 'z' ? midT : wall.pos;
+      const mz = wall.dir === 'z' ? wall.pos : midT;
+      const inward = pointInPoly(mx + nx * 0.2, mz + nz * 0.2, bd) ? 1 : -1;
+      // 공유 스팬 제외 구간들
+      const gaps = [];
+      let cur = wall.lo;
+      for (const sp of wall.shared || []) {
+        if (sp.lo > cur + 0.02) gaps.push([cur, sp.lo]);
+        cur = Math.max(cur, sp.hi);
+      }
+      if (cur < wall.hi - 0.02) gaps.push([cur, wall.hi]);
+      wall.extSpans = [];
+      for (const [glo, ghi] of gaps) {
+        const t = (glo + ghi) / 2;
+        const px = (wall.dir === 'z' ? t : wall.pos) - nx * inward * 0.3 + r.pos.x;
+        const pz = (wall.dir === 'z' ? wall.pos : t) - nz * inward * 0.3 + r.pos.z;
+        if (!worldPolys.some(poly => pointInPoly(px, pz, poly))) wall.extSpans.push([glo, ghi]);
+      }
+      const extLen = wall.extSpans.reduce((s2, sp) => s2 + sp[1] - sp[0], 0);
+      wall.isExterior = extLen > wall.len * 0.5;
+    }
   }
   return walls;
 
@@ -548,4 +616,24 @@ export function setExtraQty(r, id, qty) {
   if (qty <= 0) r.extras = r.extras.filter(x => x.id !== id);
   else { const ex = r.extras.find(x => x.id === id); if (ex) ex.qty = qty; }
   emit('project');
+}
+
+/// 벽의 컷 목록(개구부 + 공유 스팬) — 렌더러 공용. {lo, hi, o?}(개구부) | {lo, hi, shared}
+export function wallCuts(wall) {
+  return [
+    ...wall.openings.map(op => ({ lo: op.lo, hi: op.hi, o: op })),
+    ...(wall.shared || []).map(s2 => ({ lo: s2.lo, hi: s2.hi, shared: true })),
+  ].sort((p, q) => p.lo - q.lo);
+}
+/// 컷을 제외한 실체 벽 조각 [lo, hi][]
+export function wallSolidPieces(wall) {
+  const pieces = [];
+  let cursor = wall.lo;
+  for (const c of wallCuts(wall)) {
+    if (c.lo > cursor + 0.005) pieces.push([cursor, c.lo]);
+    cursor = Math.max(cursor, c.hi);
+  }
+  if (cursor < wall.hi - 0.005) pieces.push([cursor, wall.hi]);
+  if (!pieces.length && !wallCuts(wall).length) pieces.push([wall.lo, wall.hi]);
+  return pieces;
 }

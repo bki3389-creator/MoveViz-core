@@ -2,7 +2,7 @@
 // 벽 이중선(개구부 컷·코너 연장), 문 스윙(방 안쪽), 창 3선+잼, 실명/면적(한글은 \U+XXXX
 // 유니코드 이스케이프 — AutoCAD 2004+ 정상 표시), 붙은 변 치수 생략. 단위 mm.
 
-import { state, layoutOffsets, wallsOf, metricsOf, bboxOf } from './state.js';
+import { state, layoutOffsets, wallsOf, wallCuts, metricsOf, bboxOf } from './state.js';
 import { item } from './catalog.js';
 
 export function exportDXF() {
@@ -79,24 +79,30 @@ export function exportDXF() {
 
     // ── 벽: 2D와 동일 — 개구부 컷 + 코너 연장 + 이중선(±tb/2 오프셋 2줄)
     for (const w of wallsOf(r)) {
-      const tb = w.inner ? 0.10 : 0.15, halfM = tb / 2;
+      const tb = w.inner ? 0.10 : (w.isExterior ? 0.20 : 0.15), halfM = tb / 2;
+      const WL = (!w.inner && w.isExterior) ? 'S-WALL' : 'A-WALL';   // 골조/마감 레이어 분리
+      const cutsAll = wallCuts(w);
+      const sharedAt = t2 => (w.shared || []).some(sp => t2 > sp.lo - 0.02 && t2 < sp.hi + 0.02);
       const pieces = [];
-      let cursor = w.lo;
-      for (const o of w.openings) { if (o.lo > cursor) pieces.push([cursor, o.lo]); cursor = Math.max(cursor, o.hi); }
-      if (cursor < w.hi) pieces.push([cursor, w.hi]);
-      if (!w.openings.length) { pieces.length = 0; pieces.push([w.lo, w.hi]); }
+      { let cursor = w.lo;
+        for (const c of cutsAll) {
+          if (c.lo > cursor + 0.005) pieces.push([cursor, c.lo]);
+          cursor = Math.max(cursor, c.hi);
+        }
+        if (cursor < w.hi - 0.005) pieces.push([cursor, w.hi]);
+        if (!cutsAll.length) pieces.push([w.lo, w.hi]); }
       for (const [a0, b0] of pieces) {
         const a = Math.abs(a0 - w.lo) < 1e-9 ? a0 - halfM : a0;
         const b = Math.abs(b0 - w.hi) < 1e-9 ? b0 + halfM : b0;
         for (const k of [-halfM, halfM]) {   // 이중선
-          if (w.dir === 'z') line(X(a), Y(w.pos + k), X(b), Y(w.pos + k), 'A-WALL');
-          else line(X(w.pos + k), Y(a), X(w.pos + k), Y(b), 'A-WALL');
+          if (w.dir === 'z') line(X(a), Y(w.pos + k), X(b), Y(w.pos + k), WL);
+          else line(X(w.pos + k), Y(a), X(w.pos + k), Y(b), WL);
         }
-        // 조각 끝 마감선(개구부 가장자리 = 잼)
+        // 조각 끝 마감선 — 코너·공유 경계는 생략(개구부 잼만)
         for (const [end, isCorner] of [[a, Math.abs(a0 - w.lo) < 1e-9], [b, Math.abs(b0 - w.hi) < 1e-9]]) {
-          if (isCorner) continue;
-          if (w.dir === 'z') line(X(end), Y(w.pos - halfM), X(end), Y(w.pos + halfM), 'A-WALL');
-          else line(X(w.pos - halfM), Y(end), X(w.pos + halfM), Y(end), 'A-WALL');
+          if (isCorner || sharedAt(end)) continue;
+          if (w.dir === 'z') line(X(end), Y(w.pos - halfM), X(end), Y(w.pos + halfM), WL);
+          else line(X(w.pos - halfM), Y(end), X(w.pos + halfM), Y(end), WL);
         }
       }
       // ── 개구부 심볼 (소유 방만)
@@ -172,6 +178,77 @@ export function exportDXF() {
     else dim(X(bb.maxX), Y(bb.maxZ), X(bb.maxX), Y(bb.minZ), [1, 0], dmm);
   }
 
+  // ═══ 단면도 세트: 평면 아래에 방별 단면 + 벽-바닥 접합 상세 ═══
+  if (isFinite(mnX)) {
+    const secBaseY = mnY - 3.6;   // 평면 아래
+    let secX = mnX;
+    const SLAB = 0.15, EXT_T = 0.2;
+    const FLOOR_FIN = { fl_tile600: 0.03, fl_tile300: 0.03, fl_polish: 0.03 };
+    for (const r of P.rooms) {
+      const bb = bboxOf(r.plan); if (!bb) continue;
+      const m = metricsOf(r);
+      const W = bb.maxX - bb.minX, H = m.H;
+      const ox = secX + EXT_T, oy = secBaseY - H;   // oy = 바닥 마감면
+      const finT = FLOOR_FIN[r.floorFinish] ?? 0.012;
+      // 바닥: 구조 슬래브 + 마감층
+      poly([[ox - EXT_T, oy - finT - SLAB], [ox + W + EXT_T, oy - finT - SLAB],
+            [ox + W + EXT_T, oy - finT], [ox - EXT_T, oy - finT]], 'S-SLAB', true);
+      line(ox, oy, ox + W, oy, 'A-SECT');                                  // 바닥 마감면
+      line(ox, oy - finT, ox + W, oy - finT, 'A-SECT');                    // 마감층 하단
+      // 좌우 벽 골조 + 마감선
+      for (const [wx0, sgn2] of [[ox - EXT_T, 1], [ox + W, -1]]) {
+        poly([[wx0, oy - finT], [wx0 + EXT_T, oy - finT], [wx0 + EXT_T, oy + H + 0.1], [wx0, oy + H + 0.1]], 'S-WALL', true);
+        const fx2 = sgn2 > 0 ? wx0 + EXT_T + 0.012 : wx0 - 0.012;
+        line(fx2, oy, fx2, oy + H, 'A-SECT');                              // 벽 마감선(도배/타일)
+      }
+      // 상부 슬래브
+      poly([[ox - EXT_T, oy + H + 0.1], [ox + W + EXT_T, oy + H + 0.1],
+            [ox + W + EXT_T, oy + H + 0.1 + SLAB], [ox - EXT_T, oy + H + 0.1 + SLAB]], 'S-SLAB', true);
+      // 천장 유형별 프로파일
+      const ct2 = r.ceilingType;
+      if (ct2 === 'ct_well' && W > 1.4) {
+        const bnd = 0.35, drop = 0.12;
+        line(ox, oy + H, ox + bnd, oy + H, 'A-SECT');
+        line(ox + W - bnd, oy + H, ox + W, oy + H, 'A-SECT');
+        line(ox + bnd, oy + H, ox + bnd, oy + H + drop, 'A-SECT');
+        line(ox + W - bnd, oy + H, ox + W - bnd, oy + H + drop, 'A-SECT');
+        line(ox + bnd, oy + H + drop, ox + W - bnd, oy + H + drop, 'A-SECT');
+      } else if (ct2 === 'ct_indirect' && W > 1.0) {
+        for (const bx of [ox, ox + W - 0.3]) {
+          poly([[bx, oy + H - 0.15], [bx + 0.3, oy + H - 0.15], [bx + 0.3, oy + H], [bx, oy + H]], 'A-SECT', true);
+        }
+        line(ox + 0.3, oy + H, ox + W - 0.3, oy + H, 'A-SECT');
+      } else {
+        line(ox, oy + H, ox + W, oy + H, 'A-SECT');                        // 평천장 마감선
+      }
+      // 치수(CH·폭) + 라벨
+      line(ox - EXT_T - 0.45, oy, ox - EXT_T - 0.45, oy + H, 'A-ANNO-DIMS');
+      line(ox - EXT_T - 0.55, oy, ox - EXT_T - 0.35, oy, 'A-ANNO-DIMS');
+      line(ox - EXT_T - 0.55, oy + H, ox - EXT_T - 0.35, oy + H, 'A-ANNO-DIMS');
+      text(ox - EXT_T - 0.6, oy + H / 2, 0.11, `CH ${Math.round(H * 1000)}`, 'A-ANNO-DIMS');
+      text(ox + W / 2, oy + H + 0.55, 0.14, `${r.name} 단면`, 'A-ANNO-TEXT');
+      text(ox + W / 2, oy + 0.25, 0.09,
+           `바닥 ${item(r.floorFinish)?.name ?? ''} / 벽 ${item(r.wallFinish)?.name ?? ''} / 천장 ${item(r.ceilFinish)?.name ?? ''}`,
+           'A-SECT');
+      EXT(ox - EXT_T - 0.7, oy - finT - SLAB - 0.2);
+      secX += W + EXT_T * 2 + 1.2;
+    }
+    // 벽-바닥 접합 상세 (4배 확대, 참조용)
+    {
+      const k = 4, dx0 = secX + 0.8, dy0 = secBaseY - 1.2;
+      poly([[dx0, dy0], [dx0 + 0.9 * k, dy0], [dx0 + 0.9 * k, dy0 + 0.04 * k], [dx0, dy0 + 0.04 * k]], 'S-SLAB', true);   // 슬래브 상단부
+      line(dx0 + 0.15 * k, dy0 + 0.04 * k, dx0 + 0.9 * k, dy0 + 0.04 * k, 'A-SECT');                                        // 바닥 마감
+      line(dx0 + 0.15 * k, dy0 + 0.052 * k, dx0 + 0.9 * k, dy0 + 0.052 * k, 'A-SECT');
+      poly([[dx0, dy0 + 0.04 * k], [dx0 + 0.15 * k, dy0 + 0.04 * k], [dx0 + 0.15 * k, dy0 + 0.6 * k], [dx0, dy0 + 0.6 * k]], 'S-WALL', true);  // 벽
+      line(dx0 + 0.15 * k + 0.01 * k, dy0 + 0.052 * k, dx0 + 0.15 * k + 0.01 * k, dy0 + 0.6 * k, 'A-SECT');                  // 벽 마감
+      poly([[dx0 + 0.15 * k, dy0 + 0.052 * k], [dx0 + 0.18 * k, dy0 + 0.052 * k],
+            [dx0 + 0.18 * k, dy0 + 0.132 * k], [dx0 + 0.15 * k, dy0 + 0.132 * k]], 'A-SECT', true);                          // 걸레받이 H80
+      text(dx0 + 0.45 * k, dy0 + 0.75 * k, 0.13, '벽-바닥 접합 상세 (4배 확대)', 'A-ANNO-TEXT');
+      text(dx0 + 0.55 * k, dy0 + 0.2 * k, 0.09, '걸레받이 H80 / 바닥 마감층 / 벽 마감', 'A-SECT');
+      EXT(dx0 + 1.0 * k, dy0 - 0.3);
+    }
+  }
+
   if (!isFinite(mnX)) return;
   text(mnX + 0.2, mnY - 0.6, 0.2, `${P.name || 'PlanShot'}  ${P.company || ''}  단위 mm`, 'A-ANNO-TEXT', 0);
   text(mnX + 0.2, mnY - 0.95, 0.12, '개략 실측 — 시공 발주 전 정밀실측 필요 / iPhone LiDAR', 'A-ANNO-TEXT', 0);
@@ -187,8 +264,8 @@ export function exportDXF() {
   g(0, 'TABLE'); g(2, 'LTYPE'); g(70, '1');
   g(0, 'LTYPE'); g(2, 'CONTINUOUS'); g(70, '64'); g(3, 'Solid line'); g(72, '65'); g(73, '0'); g(40, '0.0');
   g(0, 'ENDTAB');
-  const layers = [['0', 7], ['A-WALL', 7], ['A-DOOR', 3], ['A-GLAZ', 4], ['A-FURN', 8],
-                  ['A-ANNO-TEXT', 7], ['A-AREA', 2], ['A-ANNO-DIMS', 1], ['E-LITE', 2]];
+  const layers = [['0', 7], ['S-WALL', 8], ['S-SLAB', 8], ['A-WALL', 7], ['A-SECT', 5], ['A-DOOR', 3],
+                  ['A-GLAZ', 4], ['A-FURN', 8], ['A-ANNO-TEXT', 7], ['A-AREA', 2], ['A-ANNO-DIMS', 1], ['E-LITE', 2]];
   g(0, 'TABLE'); g(2, 'LAYER'); g(70, String(layers.length));
   for (const [nm, c] of layers) { g(0, 'LAYER'); g(2, nm); g(70, '64'); g(62, String(c)); g(6, 'CONTINUOUS'); }
   g(0, 'ENDTAB');
