@@ -740,3 +740,27 @@ export function straightenRoom(r) {
   emit('project');
   return Math.abs(theta) > 0.002;
 }
+
+// ── 문 방향(경첩·스윙) — flip 0:기본 1:스윙반전 2:경첩반대 3:경첩반대+스윙반전 ──
+export function doorGeom(w, o, bd) {
+  const ux = w.dir === 'z' ? 1 : 0, uz = w.dir === 'z' ? 0 : 1;   // 벽 진행
+  const nx = w.dir === 'z' ? 0 : 1, nz = w.dir === 'z' ? 1 : 0;   // 법선
+  const flip = o.flip || 0;
+  const hingeAtEnd = flip >= 2;
+  const ht = hingeAtEnd ? o.hi : o.lo;
+  const hx = w.dir === 'z' ? ht : w.pos, hz = w.dir === 'z' ? w.pos : ht;
+  const ax = ux * (hingeAtEnd ? -1 : 1), az = uz * (hingeAtEnd ? -1 : 1);  // 경첩→반대 잼
+  const k = o.w * 0.55;
+  const auto = pointInPoly(hx + (ax + nx) * k * 0.75, hz + (az + nz) * k * 0.75, bd) ? 1 : -1;
+  const sgn = flip % 2 ? -auto : auto;   // 기본은 방 안쪽으로, 홀수 flip이면 반전
+  return { hx, hz, ax, az, nx, nz, sgn };
+}
+
+/// Space — 문 방향 4상태 순환 (opening.flip에 저장, 2D/3D/DXF 공통 반영)
+export function flipDoor(r, idx) {
+  const o = r?.plan?.openings?.[idx];
+  if (!o || o.type === 'window') return;
+  pushHistory(r);
+  o.flip = ((o.flip || 0) + 1) % 4;
+  emit('project');
+}

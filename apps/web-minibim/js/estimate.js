@@ -74,11 +74,19 @@ export function buildEstimate() {
   const laborDays = Object.entries(crews).map(([c, won]) => ({
     crew: c, won, days: won / (DAY_RATES[c] || 250000),
   })).sort((a, b) => b.won - a.won);
-  return { rows, sub, subM, subL, vat, total: sub + vat, laborDays };
+  // 철거 폐기물 추정(참고): 마감 철거 ㎡→kg + 벽 철거 + 가구 반출 톤
+  const DEMO_KG = { 'w_demo#0': 4, 'w_demo#1': 14, 'w_demo#2': 22, wt_demo: 90 };
+  let demoKg = 0;
+  for (const x of rows) {
+    if (DEMO_KG[x.id] != null) demoKg += x.qty * DEMO_KG[x.id];
+    else if (String(x.id).startsWith('w_furnout')) demoKg += x.qty * 1000;
+  }
+  const demoTons = Math.round(demoKg / 100) / 10;
+  return { rows, sub, subM, subL, vat, total: sub + vat, laborDays, demoTons };
 }
 
 export function renderEstimate(elSummary, elTable) {
-  const { rows, sub, subM, subL, vat, total, laborDays } = buildEstimate();
+  const { rows, sub, subM, subL, vat, total, laborDays, demoTons } = buildEstimate();
   elSummary.innerHTML = `
     <div class="est-sum">
       <div><span>재료비</span><b>${KRW(Math.round(subM))}원</b></div>
@@ -90,6 +98,7 @@ export function renderEstimate(elSummary, elTable) {
       ${laborDays?.length ? `<div class="crewdays">노무 품 환산(참고): ${laborDays.map(d =>
         `${d.crew} ${d.days.toFixed(1)}품${d.days < 1 ? '⚠' : ''}`).join(' · ')}
         <span>⚠ = 1품(1일) 미만 — 실제로는 일당 단위 청구될 수 있어 소량 공정은 상향 조정 권장</span></div>` : ''}
+      ${demoTons ? `<div class="crewdays">철거 폐기물 추정 ≈ <b>${demoTons}톤</b> — 철거·가구반출 수량 기반 (2.5톤 차량 ${Math.ceil(demoTons / 2.5)}대분)</div>` : ''}
     </div>`;
 
   let html = `<table class="est"><thead><tr>
@@ -128,7 +137,7 @@ export function renderEstimate(elSummary, elTable) {
   });
 }
 
-function unitKo(u) { return u === 'm2' ? '㎡' : u === 'm' ? 'm' : '개'; }
+function unitKo(u) { return { m2: '㎡', m: 'm', ea: '개', sik: '식', ton: '톤' }[u] || u; }
 
 export function exportCSV() {
   const { rows, sub, subM, subL, vat, total } = buildEstimate();

@@ -45,7 +45,7 @@ aside { background: var(--panel); overflow-y: auto; }
 
 /* 중앙 */
 #center { display: flex; flex-direction: column; min-width: 0; }
-#viewTabs { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--panel);
+#viewTabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; background: var(--panel);
   border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .vtab { border: 1px solid var(--line); background: var(--card); color: var(--sub); padding: 6px 14px;
   border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; }
@@ -131,3 +131,18 @@ table.est tr.tot td { color: var(--accent); font-size: 12px; }
 .shot-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .shot-head span { font-size: 12px; color: var(--sub); }
 #shotCanvas { display: block; width: min(88vw, 960px); height: auto; background: #dde3ea; }
+
+.tip.price { color: #14324a; background: #eef4fa; border: 1px solid #d7e4f0; border-radius: 8px;
+  padding: 7px 9px; font-weight: 600; font-size: 12px; }
+
+/* 가로 스크롤 절대 금지 — 표/패널은 항상 자기 폭에 맞춘다 */
+aside { overflow-x: hidden; }
+#right *, #left * { min-width: 0; }
+table.est { table-layout: fixed; }
+table.est th:nth-child(1) { width: 9%; }
+table.est th:nth-child(2) { width: 24%; }
+table.est th:nth-child(3) { width: 7%; }
+table.est th:nth-child(4) { width: 11%; }
+table.est th:nth-child(5), table.est th:nth-child(6) { width: 16.5%; }
+table.est td { overflow-wrap: anywhere; }
+.rate-in { width: 100%; box-sizing: border-box; padding: 1px 2px; }

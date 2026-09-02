@@ -1,14 +1,15 @@
 // main.js — UI 배선: 헤더/탭/2D 편집 도구/좌측 방 목록/우측 인스펙터/견적/인쇄(도면+견적).
 
-import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore, addExtra, setExtraQty, straightenRoom,
+import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore, addExtra, setExtraQty, straightenRoom, flipDoor,
          selectedRoom, room, metricsOf, wallsOf, removeLight, undo,
          updateOpening, removeOpening, removeInnerWall, scaleRoom,
          addFurniture, rotateFurniture, resizeFurniture, removeFurniture, arrangeRooms } from './state.js';
 import { init2D, render2d, renderRoomImage, cancelWallDraw } from './plan2d.js';
+import * as stateMod from './state.js';
 import { init3D, rebuild3D, frameAll, clearHighlight, getSceneRefs } from './scene3d.js';
 import { renderEstimate, exportCSV, buildEstimate } from './estimate.js';
 import { exportDXF } from './dxf.js';
-import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS, FURN_ITEMS,
+import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS, FURN_ITEMS, furnKgOf, ratesOf,
          WORK_ITEMS, workItem, workGrade, roomTypeOf, item, KRW, canonId, unitKo2 } from './catalog.js';
 
 const $ = id => document.getElementById(id);
@@ -143,7 +144,18 @@ $('chkFX').onchange = e => { state.lightFX = e.target.checked; rebuild3D(); };
 $('chkFurn').onchange = e => { state.showFurniture = e.target.checked; rebuild3D(); render2d(); };
 $('btnFrame').onclick = () => frameAll();
 $('btnShot').onclick = () => runRenderShot();
-async function runRenderShot(sampleTarget = 200, w = 1280, h = 800) {
+/// 실내 시점: 선택한 방 안 눈높이 1.4m 코너 근처에서 방 중심을 바라봄.
+function interiorPose() {
+  const r = selectedRoom(); if (!r) return null;
+  const { layoutOffsets, bboxOf } = stateMod;
+  const off = layoutOffsets()[r.id]; const bb = off?.bb; if (!bb) return null;
+  const cx = off.x + (bb.minX + bb.maxX) / 2, cz = off.z + (bb.minZ + bb.maxZ) / 2;
+  const w2 = bb.maxX - bb.minX, d2 = bb.maxZ - bb.minZ;
+  // 방 안쪽 코너(문 반대편 대각) 근처에 카메라
+  const px = cx - w2 * 0.36, pz = cz + d2 * 0.36;
+  return { pos: [px, 1.4, pz], look: [cx + w2 * 0.12, 1.15, cz - d2 * 0.15], fov: 64 };
+}
+async function runRenderShot(sampleTarget = 200, w = 1280, h = 800, mode = 'auto') {
   const { renderShot, stopRender, isRendering } = await import('./render.js');
   if (isRendering()) return;
   setTab('3d');
@@ -153,10 +165,16 @@ async function runRenderShot(sampleTarget = 200, w = 1280, h = 800) {
   $('shotProg').textContent = '준비 중…';
   $('shotStop').onclick = () => stopRender();
   $('shotClose').onclick = () => { stopRender(); modal.hidden = true; };
+  $('shotView').onclick = () => { stopRender(); setTimeout(() => runRenderShot(sampleTarget, w, h,
+    mode === 'overview' || (mode === 'auto' && interiorPose()) ? 'overview2' : 'auto'), 300); };
+  // overview2 → 실내↔전체 토글용: 'overview'로 정규화
+  if (mode === 'overview2') mode = 'overview';
   const { root, camera } = getSceneRefs();
+  const pose = mode === 'overview' ? null : interiorPose();
+  $('shotProg').textContent = pose ? '실내 뷰 렌더 중…' : '전체 뷰 렌더 중…';
   const url = await renderShot(root, camera, cv2, {
-    width: w, height: h, samples: sampleTarget,
-    onProgress: (n, t) => { $('shotProg').textContent = `샘플 ${n}/${t}`; },
+    width: w, height: h, samples: sampleTarget, camPose: pose,
+    onProgress: (n, t) => { $('shotProg').textContent = `${pose ? '실내' : '전체'} 뷰 · 샘플 ${n}/${t}`; },
   });
   if (url) {
     $('shotProg').textContent += ' · 완료';
@@ -177,8 +195,9 @@ function syncToolbar() {
   $('lightType').style.opacity = state.mode === 'light' ? 1 : 0.45;
   let hint = '';
   if (state.activeTab === '2d') {
-    hint = { door: '벽 클릭 = 문 900 추가', window: '벽 클릭 = 창 1500 추가',
-             wall: '두 점 클릭 = 가벽 (Esc 종료)', select: '' }[state.tool2d || 'select'];
+    hint = { door: '벽 클릭 = 문 900 추가 · 배치 후 Space 방향', window: '벽 클릭 = 창 1500 추가',
+             wall: '두 점 클릭 = 가벽(수평/수직 자동) · Esc 종료',
+             select: 'Space 방향전환 · E/Del 삭제 · D문 Q창 W가벽' }[state.tool2d || 'select'];
   } else if (state.mode === 'light') {
     hint = item(state.lightType)?.kind === 'line' ? '천장/바닥 두 번 클릭 = 라인조명' : '천장/바닥 클릭 = 조명 설치';
   }
@@ -190,27 +209,44 @@ setTab('3d');
 document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;   // 입력 중 가드
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === 'z') {
     e.preventDefault(); clearHighlight(); undo(); return;
   }
-  if (e.key === 'Delete' || e.key === 'Backspace') {
-    const s = state.sel; if (!s) return;
-    const r = room(s.roomId); if (!r) return;
-    clearHighlight();
-    if (s.kind === 'light') removeLight(r, s.lightId);
-    else if (s.kind === 'opening') removeOpening(r, s.openingIdx);
-    else if (s.kind === 'furniture') removeFurniture(r, s.furnIdx);
-    else if (s.kind === 'wall' && /^[xz]\d+_\d+$/.test(s.wallKey)) removeInnerWall(r, s.wallKey);
-  }
+  if (e.key === 'Delete' || e.key === 'Backspace' || k === 'e') { deleteSelected(); return; }
   if (e.key === 'Escape') {
     state.pendingLine = null; state.mode = 'select'; state.tool2d = 'select';
-    cancelWallDraw(); syncToolbar();
+    cancelWallDraw(); syncToolbar(); return;
   }
-  if (e.key.toLowerCase() === 'r' && state.sel?.kind === 'furniture') {
+  if (e.key === ' ') {   // Space = 가구 90° 회전 / 문 방향 4상태(경첩·스윙) 순환
+    const s2 = state.sel; const r = s2 && room(s2.roomId);
+    if (r && s2.kind === 'furniture') { e.preventDefault(); rotateFurniture(r, s2.furnIdx); }
+    else if (r && s2.kind === 'opening') {
+      const o = r.plan.openings[s2.openingIdx];
+      if (o && o.type !== 'window') { e.preventDefault(); flipDoor(r, s2.openingIdx); }
+    }
+    return;
+  }
+  if (k === 'r' && state.sel?.kind === 'furniture') {
     const r = room(state.sel.roomId);
     if (r) rotateFurniture(r, state.sel.furnIdx);
+    return;
   }
+  // 도구 단축키 (원본 미니빔과 동일: V 선택 · D 문 · Q 창 · W 가벽)
+  if (k === 'v') { state.tool2d = 'select'; syncToolbar(); }
+  if (k === 'd') { state.tool2d = 'door'; setTab('2d'); syncToolbar(); }
+  if (k === 'q') { state.tool2d = 'window'; setTab('2d'); syncToolbar(); }
+  if (k === 'w') { state.tool2d = 'wall'; cancelWallDraw(); setTab('2d'); syncToolbar(); }
 });
+function deleteSelected() {
+  const s = state.sel; if (!s) return;
+  const r = room(s.roomId); if (!r) return;
+  clearHighlight();
+  if (s.kind === 'light') removeLight(r, s.lightId);
+  else if (s.kind === 'opening') removeOpening(r, s.openingIdx);
+  else if (s.kind === 'furniture') removeFurniture(r, s.furnIdx);
+  else if (s.kind === 'wall' && /^[xz]\d+_\d+$/.test(s.wallKey)) removeInnerWall(r, s.wallKey);
+}
 
 // ── 좌측: 방 목록 ──────────────────────────────────
 function renderRooms() {
@@ -317,7 +353,8 @@ function renderInspector() {
     el.appendChild(head);
     el.appendChild(numFld('폭 (mm)', mmOf(w), v => resizeFurniture(r, s.furnIdx, v / 1000, d)));
     el.appendChild(numFld('깊이 (mm)', mmOf(d), v => resizeFurniture(r, s.furnIdx, w, v / 1000)));
-    el.appendChild(btn('90° 회전 (R)', '', () => rotateFurniture(r, s.furnIdx)));
+    el.appendChild(priceKg(f, w, d));
+    el.appendChild(btn('90° 회전 (Space/R)', '', () => rotateFurniture(r, s.furnIdx)));
     el.appendChild(btn('삭제 (Del)', 'danger', () => removeFurniture(r, s.furnIdx)));
     el.appendChild(tip('2D에서 드래그로 이동합니다.'));
   } else if (s?.kind === 'wall' && s.roomId === r.id) {
@@ -346,6 +383,11 @@ function renderInspector() {
     head.innerHTML = `<b>${esc(r.name)} · ${li?.name ?? '조명'}</b>
       <span>${li?.kind === 'line' && l.x2 != null ? '길이 ' + Math.hypot(l.x2 - l.x, l.z2 - l.z).toFixed(2) + 'm' : `위치 (${l?.x.toFixed(2)}, ${l?.z.toFixed(2)})`}</span>`;
     el.appendChild(head);
+    if (li) {   // 이 조명의 견적 단가 — 선택한 객체의 비용만 표시
+      const rr = ratesOf(l.type, state.project?.rates);
+      const qty = li.kind === 'line' && l.x2 != null ? Math.hypot(l.x2 - l.x, l.z2 - l.z) : 1;
+      el.appendChild(priceChip(li.name, rr.m, rr.l, qty, li.kind === 'line' ? 'm' : 'ea'));
+    }
     el.appendChild(btn('이 조명 삭제 (Del)', 'danger', () => { clearHighlight(); removeLight(r, s.lightId); }));
   } else {
     head.innerHTML = `<b>${esc(r.name)}</b>
@@ -472,9 +514,36 @@ function autoQtyFor(r, wi) {
   if (rule.roomType && roomTypeOf(r.name) !== rule.roomType) return null;
   const m = metricsOf(r);
   const v = { A_floor: m.area, A_wall: m.wallNet, P: m.per, P_door: m.baseboard,
-              N_door: m.doors, N_win: m.windows, A_win: m.winArea, room: 1 }[rule.basis];
+              N_door: m.doors, N_win: m.windows, A_win: m.winArea, room: 1,
+              W_furn: furnTons(r) }[rule.basis];
   if (v == null || v <= 0.001) return null;
   return Math.round(v * (rule.factor || 1) * 100) / 100;
+}
+
+/// 방 가구 총 무게(톤, 0.1 단위) — '가구 반출·폐기' 자동 수량
+function furnTons(r) {
+  const kg = (r.plan.furniture || []).reduce((a2, f) => {
+    const cs = f.obb || f.polygon || []; if (cs.length < 4) return a2;
+    const fw = Math.hypot(cs[1][0] - cs[0][0], cs[1][1] - cs[0][1]);
+    const fd = Math.hypot(cs[3][0] - cs[0][0], cs[3][1] - cs[0][1]);
+    return a2 + furnKgOf(f.category, fw, fd);
+  }, 0);
+  return Math.round(kg / 100) / 10;
+}
+
+function priceKg(f, w, d) {
+  const el2 = document.createElement('div');
+  el2.className = 'tip price';
+  el2.textContent = `추정 무게 ~${furnKgOf(f.category, w, d)}kg — 철거 시 '가구 반출·폐기' 수량에 반영`;
+  return el2;
+}
+
+function priceChip(label, mWon, lWon, qty, unit) {
+  const d = document.createElement('div');
+  d.className = 'tip price';
+  d.textContent = `${label} — 재료 ${KRW(Math.round(mWon * qty))} + 노무 ${KRW(Math.round(lWon * qty))} = ${KRW(Math.round((mWon + lWon) * qty))}원`
+    + (unit === 'm' ? ` (${qty.toFixed(1)}m)` : '');
+  return d;
 }
 
 function tip(text) {

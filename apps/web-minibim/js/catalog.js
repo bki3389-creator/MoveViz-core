@@ -91,6 +91,8 @@ export const WORK_ITEMS = [
     grades: [ { g: '부분(도배·장판)', mat: 1000, lab: 12000 }, { g: '마감재 전체', mat: 2000, lab: 22000 }, { g: '올철거(주방·욕실 포함)', mat: 3000, lab: 33000 } ] },
   { id: 'w_waste', group: '공통', name: '폐기물 처리', unit: 'sik', auto: { basis: 'manual' },
     grades: [ { g: '톤백 반출', mat: 0, lab: 200000 }, { g: '1톤 차량', mat: 0, lab: 320000 }, { g: '2.5톤 차량', mat: 0, lab: 500000 } ] },
+  { id: 'w_furnout', group: '공통', name: '가구 반출·폐기', unit: 'ton', auto: { basis: 'W_furn' },
+    grades: [ { g: '재활용 위주(수거 병행)', mat: 0, lab: 180000 }, { g: '혼합폐기 반출', mat: 0, lab: 280000 }, { g: '대형·해체 포함', mat: 0, lab: 380000 } ] },
   { id: 'w_protect', group: '공통', name: '양생·보양', unit: 'sik', auto: { basis: 'manual' },
     grades: [ { g: '기본(세대 내)', mat: 100000, lab: 200000 }, { g: 'EV·복도 포함', mat: 180000, lab: 320000 } ] },
   { id: 'w_clean', group: '공통', name: '입주 청소', unit: 'm2', auto: { basis: 'A_floor' },
@@ -294,3 +296,15 @@ export const FURN_ITEMS = [
   { name: '세면대', category: 'sink', w: 0.6, d: 0.45 },
   { name: '욕조 1500', category: 'bathtub', w: 1.5, d: 0.75 },
 ];
+
+// ── 가구 추정 무게 (철거·반출 산정용): category → [기본 kg, 기준 바닥면적 ㎡] ──
+export const FURN_KG = {
+  bed: [55, 3.0], sofa: [40, 1.8], table: [28, 0.96], chair: [6, 0.23],
+  cabinet: [65, 0.9], refrigerator: [110, 0.72], appliance: [65, 0.4],
+  toilet: [35, 0.28], sink: [20, 0.27], bathtub: [55, 1.13], tv: [15, 0.5],
+};
+export function furnKgOf(cat, w, d) {
+  const [base, typA] = FURN_KG[cat] || [25, 0.8];
+  const k = typA ? Math.max(0.4, Math.min(2.5, (w * d) / typA)) : 1;   // 크기 비례(0.4~2.5배)
+  return Math.round(base * k);
+}

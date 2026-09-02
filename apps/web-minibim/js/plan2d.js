@@ -2,7 +2,7 @@
 // 인터랙션 수식은 아키톤 FloorPlanEditor에서 이식: 개구부 배치 = snap(t·L − w/2) + 양끝 클램프,
 // 슬라이드 = 내적 투영, 벽 드래그 = 법선 방향 이동. 인쇄용 방별 렌더(renderRoomImage) 포함.
 
-import { state, emit, layoutOffsets, wallsOf, wallSolidPieces, metricsOf, detectRegions, room, snap,
+import { state, emit, layoutOffsets, wallsOf, wallSolidPieces, metricsOf, detectRegions, room, snap, doorGeom,
          addOpening, slideOpening, addInnerWall, moveWall, moveFurniture, pushHistory,
          moveRoomBy, snapRoomPos } from './state.js';
 import { item } from './catalog.js';
@@ -12,7 +12,11 @@ let fit = { s: 60, ox: 40, oy: 40 };
 let fitDirty = true, fitKey = '';
 let drag = null;          // {kind:'pan'|'furn'|'opening'|'wall', ...}
 let wallDraw = null;      // 가벽 도구 첫 점 {roomId, x, z}
-let hoverWall = null;     // 문/창 도구 호버 표시
+let hoverWall = null;
+let wallCur = null;       // 가벽 미리보기 현재점
+function axisLock(st2, x, z) {
+  return Math.abs(x - st2.x) >= Math.abs(z - st2.z) ? [x, st2.z] : [st2.x, z];
+}     // 문/창 도구 호버 표시
 
 const DARK = {   // (이름 유지 — 인터랙티브 테마. 현재 화이트)
   bg: '#fbfcfd', fill: 'rgba(30,45,65,0.035)', fillSel: 'rgba(21,127,190,0.08)',
@@ -86,6 +90,14 @@ export function render2d() {
     const off = offs[wallDraw.roomId];
     if (off) {
       const [x, y] = toPx(wallDraw.x + off.x, wallDraw.z + off.z);
+      if (wallCur) {   // 축고정 미리보기 선 + 길이(mm)
+        const [ex, ez] = axisLock(wallDraw, wallCur[0], wallCur[1]);
+        const [x2, y2] = toPx(ex + off.x, ez + off.z);
+        ctx.strokeStyle = '#b07d10'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#b07d10'; ctx.font = '10px sans-serif';
+        ctx.fillText(String(Math.round(Math.hypot(ex - wallDraw.x, ez - wallDraw.z) * 1000)), (x + x2) / 2 + 6, (y + y2) / 2 - 6);
+      }
       ctx.fillStyle = '#b07d10';
       ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
     }
@@ -166,9 +178,12 @@ function paintRoom(g, r, off, P, s, th, interactive) {
     const pieces = wallSolidPieces(w);
     g.lineCap = 'butt';
     const halfM = bandM / 2;   // 코너 채움용 반두께(m)
+    // 연장 조건: 벽 끝단(코너) 또는 공유벽 스킵 경계(앞 방 벽과 이음새) — 개구부 가장자리는 그대로
+    const nearShared = t2 => (w.shared || []).some(sp =>
+      Math.abs(t2 - sp.lo) < 0.02 || Math.abs(t2 - sp.hi) < 0.02);
     const ext = pieces.map(([a0, b0]) => [
-      Math.abs(a0 - w.lo) < 1e-9 ? a0 - halfM : a0,     // 벽 끝단 = 코너 → 연장
-      Math.abs(b0 - w.hi) < 1e-9 ? b0 + halfM : b0,
+      (Math.abs(a0 - w.lo) < 1e-9 || nearShared(a0)) ? a0 - halfM : a0,
+      (Math.abs(b0 - w.hi) < 1e-9 || nearShared(b0)) ? b0 + halfM : b0,
     ]);
     const strokePieces = (color, width) => {
       g.strokeStyle = color; g.lineWidth = width;
@@ -201,22 +216,19 @@ function paintRoom(g, r, off, P, s, th, interactive) {
           g.stroke();
         }
       } else {
-        const rpx = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
-        // 스윙 방향: 평면 좌표에서 호 중간점(45°)이 방 안쪽인 쪽 선택
-        const hx = w.dir === 'z' ? o.lo : w.pos;
-        const hz = w.dir === 'z' ? w.pos : o.lo;
-        const ax2 = w.dir === 'z' ? 1 : 0, az2 = w.dir === 'z' ? 0 : 1;   // 벽 진행 방향
-        const nx2 = w.dir === 'z' ? 0 : 1, nz2 = w.dir === 'z' ? 1 : 0;   // 법선
-        const k = o.w * 0.6;
-        const insidePlus = inPoly(hx + (ax2 + nx2) * k * 0.707, hz + (az2 + nz2) * k * 0.707, plan.boundary || []);
-        const sgn = insidePlus ? 1 : -1;
+        // 문 방향: doorGeom(flip 0~3 — Space로 순환. 경첩 위치·스윙 방향 반영)
+        const dg = doorGeom(w, o, plan.boundary || []);
+        const A2 = P(dg.hx, dg.hz);
+        const J2 = P(dg.hx + dg.ax * o.w, dg.hz + dg.az * o.w);
+        const L2 = P(dg.hx + dg.nx * dg.sgn * o.w, dg.hz + dg.nz * dg.sgn * o.w);
+        const rpx = Math.hypot(J2[0] - A2[0], J2[1] - A2[1]);
+        const angJ = Math.atan2(J2[1] - A2[1], J2[0] - A2[0]);
+        const angL = Math.atan2(L2[1] - A2[1], L2[0] - A2[0]);
         g.strokeStyle = selOp ? th.wallSel : th.door; g.lineWidth = selOp ? 2 : 1.4;
-        const ea = ang + sgn * Math.PI / 2;
-        g.beginPath(); g.moveTo(a[0], a[1]);
-        g.lineTo(a[0] + rpx * Math.cos(ea), a[1] + rpx * Math.sin(ea)); g.stroke();
+        g.beginPath(); g.moveTo(A2[0], A2[1]); g.lineTo(L2[0], L2[1]); g.stroke();
         g.setLineDash([3, 3]); g.lineWidth = 1;
-        g.beginPath(); g.arc(a[0], a[1], rpx, ang, ea, sgn < 0); g.stroke();
+        const ccw = ((angL - angJ + Math.PI * 2) % (Math.PI * 2)) > Math.PI;
+        g.beginPath(); g.arc(A2[0], A2[1], rpx, angJ, angL, ccw); g.stroke();
         g.setLineDash([]);
       }
       // 개구부 폭 라벨 (선택 시)
@@ -364,6 +376,19 @@ function hitAt(wx, wz) {
       if (cs.length >= 3 && inPoly(lx, lz, cs)) return { kind: 'furniture', r, furnIdx: fi };
     }
     const walls = wallsOf(r);
+    // 문 반원(스윙 영역) 안쪽 클릭 = 문 선택 (선택 편의)
+    for (const w of walls) {
+      for (const op of w.openings) {
+        if (op.foreign || op.type === 'window') continue;
+        const dg = doorGeom(w, op, r.plan.boundary || []);
+        if (Math.hypot(lx - dg.hx, lz - dg.hz) > op.w + tol) continue;
+        const side = ((lx - dg.hx) * dg.nx + (lz - dg.hz) * dg.nz) * dg.sgn;
+        const along = (lx - dg.hx) * dg.ax + (lz - dg.hz) * dg.az;
+        if (side > -0.05 && along > -0.05) {
+          return { kind: 'opening', r, openingIdx: op.idx, wall: w, t: w.dir === 'z' ? lx : lz };
+        }
+      }
+    }
     for (const w of walls) {
       const t = w.dir === 'z' ? lx : lz;                          // 벽 축상 좌표
       const dist = w.dir === 'z' ? Math.abs(lz - w.pos) : Math.abs(lx - w.pos);
@@ -441,8 +466,9 @@ function onDown(e) {
         wallDraw = { roomId: hit.r.id, x: snap(lx), z: snap(lz) };
         render2d();
       } else {
-        addInnerWall(hit.r, wallDraw.x, wallDraw.z, snap(lx), snap(lz));
-        wallDraw = { roomId: hit.r.id, x: snap(lx), z: snap(lz) };   // 연속 그리기(끝점=다음 시작점)
+        const [ex, ez] = axisLock(wallDraw, snap(lx), snap(lz));   // 수평/수직 축고정
+        addInnerWall(hit.r, wallDraw.x, wallDraw.z, ex, ez);
+        wallDraw = { roomId: hit.r.id, x: ex, z: ez };   // 연속 그리기(끝점=다음 시작점)
       }
     }
     return;
@@ -484,6 +510,20 @@ function onMove(e) {
   const [wx, wz] = toWorld(mx, my);
   const tool = state.tool2d || 'select';
 
+  if (!drag) {   // 도구별 커서 + 가벽 미리보기 갱신
+    if (tool === 'wall') {
+      cv.style.cursor = 'crosshair';
+      if (wallDraw) {
+        const off2 = layoutOffsets()[wallDraw.roomId];
+        if (off2) { wallCur = [snap(wx - off2.x), snap(wz - off2.z)]; render2d(); }
+      }
+    } else if (tool === 'door' || tool === 'window') {
+      cv.style.cursor = 'crosshair';
+    } else {
+      const h2 = hitAt(wx, wz);
+      cv.style.cursor = h2 ? (h2.kind === 'room' ? 'grab' : 'move') : 'default';
+    }
+  }
   if ((tool === 'door' || tool === 'window') && !drag) {
     const hit = hitAt(wx, wz);
     const nh = hit && hit.kind === 'wall' ? { roomId: hit.r.id, key: hit.wall.key } : null;
@@ -550,4 +590,4 @@ function onUp(e) {
   emit('project');     // 드래그 완료 → 견적·3D 갱신 1회
 }
 
-export function cancelWallDraw() { wallDraw = null; render2d(); }
+export function cancelWallDraw() { wallDraw = null; wallCur = null; if (cv) cv.style.cursor = 'default'; render2d(); }

@@ -14,6 +14,7 @@ export function stopRender() { stopFlag = true; }
 /// onProgress(samples, target) 콜백. 완료/중지 시 resolve(dataURL).
 export async function renderShot(root, camera, canvas, {
   width = 1280, height = 800, samples = 200, onProgress = () => {},
+  camPose = null,          // {pos:[x,y,z], look:[x,y,z], fov} — 실내 시점 프리셋
 } = {}) {
   if (running) return null;
   running = true; stopFlag = false;
@@ -45,16 +46,35 @@ export async function renderShot(root, camera, canvas, {
   envTex.bottomColor.set(0x9aa1a8);
   envTex.update();
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xe9eef4);
+  scene.background = new THREE.Color(0xdfe6ee);
   scene.environment = envTex;
   // three r160 호환 심: r162+에서 추가된 회전 속성을 pathtracer가 읽는다
   scene.environmentRotation = new THREE.Euler();
   scene.backgroundRotation = new THREE.Euler();
-  scene.backgroundIntensity = 1;
-  scene.environmentIntensity = 1;
-  scene.add(root.clone(true));
+  scene.backgroundIntensity = 0.7;
+  scene.environmentIntensity = 0.55;
+  const model = root.clone(true);
+  // 렌더 전용 보정: 천장 닫기 + 조명 픽스처 발광 강화(빛나는 광원으로) + 재질 미세 러프니스
+  model.traverse(obj => {
+    if (obj.userData?.isCeil) obj.visible = true;
+    const m2 = obj.material;
+    if (m2?.emissive && (m2.emissiveIntensity ?? 0) > 0.5 && m2.emissive.getHex() !== 0) {
+      m2.emissiveIntensity = 14;   // 패스트레이서에서 실제 광원 역할
+    }
+  });
+  scene.add(model);
+  // 태양광 — 창으로 빛이 들어와 명암을 만든다
+  const sun = new THREE.DirectionalLight(0xfff0dc, 5.5);
+  sun.position.set(6, 9, -7);
+  scene.add(sun);
+  scene.add(sun.target);
 
   const cam = camera.clone();
+  if (camPose) {
+    cam.position.set(...camPose.pos);
+    cam.fov = camPose.fov || 62;
+    cam.lookAt(...camPose.look);
+  }
   cam.aspect = width / height;
   cam.updateProjectionMatrix();
 

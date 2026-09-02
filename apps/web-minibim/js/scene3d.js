@@ -4,7 +4,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { OrbitControls } from '../vendor/addons/controls/OrbitControls.js';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
-import { state, emit, layoutOffsets, wallsOf, wallCuts, ceilH, addLight, room } from './state.js';
+import { state, emit, layoutOffsets, wallsOf, wallCuts, ceilH, addLight, room, doorGeom } from './state.js';
 import { item, rateOf, FINISH_WALL } from './catalog.js';
 
 let renderer, scene, camera, controls, root, raycaster, container;
@@ -459,14 +459,11 @@ function buildRoom(r, g, allowRealLight) {
         };
         jamb(-alongLen / 2 - 0.03); jamb(alongLen / 2 + 0.03);
         // 문짝 — 힌지(lo)에서 방 안쪽으로 25° 열림
-        const hx = w.dir === 'z' ? op2.lo : w.pos;
-        const hz = w.dir === 'z' ? w.pos : op2.lo;
-        const nx = w.dir === 'z' ? 0 : 1, nz = w.dir === 'z' ? 1 : 0;
-        const ax = w.dir === 'z' ? 1 : 0, az = w.dir === 'z' ? 0 : 1;
-        const sgn = inPoly3(hx + (ax + nx) * op2.w * 0.42, hz + (az + nz) * op2.w * 0.42, bd) ? 1 : -1;
+        const dg = doorGeom(w, op2, bd);   // flip(Space) 반영 — 2D와 동일 방향
+        const hx = dg.hx, hz = dg.hz;
         const th2 = 25 * Math.PI / 180;
-        const dx2 = ax * Math.cos(th2) + nx * sgn * Math.sin(th2);
-        const dz2 = az * Math.cos(th2) + nz * sgn * Math.sin(th2);
+        const dx2 = dg.ax * Math.cos(th2) + dg.nx * dg.sgn * Math.sin(th2);
+        const dz2 = dg.az * Math.cos(th2) + dg.nz * dg.sgn * Math.sin(th2);
         const leaf = new THREE.Mesh(new THREE.BoxGeometry(op2.w - 0.06, op2.h - 0.04, 0.04),
           colorMat(0xc7b299, 0.7));
         leaf.position.set(hx + dx2 * (op2.w / 2), op2.h / 2, hz + dz2 * (op2.w / 2));

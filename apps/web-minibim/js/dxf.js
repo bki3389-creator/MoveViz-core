@@ -2,7 +2,7 @@
 // 벽 이중선(개구부 컷·코너 연장), 문 스윙(방 안쪽), 창 3선+잼, 실명/면적(한글은 \U+XXXX
 // 유니코드 이스케이프 — AutoCAD 2004+ 정상 표시), 붙은 변 치수 생략. 단위 mm.
 
-import { state, layoutOffsets, wallsOf, wallCuts, metricsOf, bboxOf } from './state.js';
+import { state, layoutOffsets, wallsOf, wallCuts, metricsOf, bboxOf, doorGeom } from './state.js';
 import { item } from './catalog.js';
 
 export function exportDXF() {
@@ -115,12 +115,10 @@ export function exportDXF() {
           }
         } else {
           // 문: 방 안쪽으로 스윙 (2D와 동일 판정)
-          const hx = w.dir === 'z' ? o.lo : w.pos;
-          const hz = w.dir === 'z' ? w.pos : o.lo;
-          const ax = w.dir === 'z' ? 1 : 0, az = w.dir === 'z' ? 0 : 1;
-          const nx = w.dir === 'z' ? 0 : 1, nz = w.dir === 'z' ? 1 : 0;
-          const k2 = o.w * 0.42;
-          const sgnP = inPoly(hx + (ax + nx) * k2, hz + (az + nz) * k2, bd) ? 1 : -1;
+          const dg = doorGeom(w, o, bd);   // flip(Space) 반영 — 화면과 동일 방향
+          const hx = dg.hx, hz = dg.hz;
+          const ax = dg.ax, az = dg.az, nx = dg.nx, nz = dg.nz;
+          const sgnP = dg.sgn;
           // 평면 z+ 는 DXF Y− → 화면과 동일 모양이 되도록 Y 반전 반영
           const lx = hx + nx * sgnP * o.w, lz = hz + nz * sgnP * o.w;
           line(X(hx), Y(hz), X(lx), Y(lz), 'A-DOOR');                        // 문짝
