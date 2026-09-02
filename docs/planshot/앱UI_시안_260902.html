@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlanShot 앱 UI 시안</title>
+<style>
+  :root { --ink:#16202b; --sub:#66727f; --line:#e3e8ee; --card:#f4f6f9; --acc:#157fbe; --amber:#d9a521; --ok:#1e9e6a; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:#20262e; font:14px/1.5 -apple-system,'Segoe UI','Malgun Gothic',sans-serif; color:var(--ink); padding:26px 18px 40px; }
+  h1 { color:#fff; font-size:19px; margin:0 4px 4px; }
+  .note { color:#9aa6b2; font-size:12px; margin:0 4px 18px; }
+  .row { display:flex; gap:22px; overflow-x:auto; padding-bottom:14px; }
+  .ph { flex:0 0 300px; width:300px; height:640px; background:#fff; border-radius:34px; border:6px solid #0d1117;
+        box-shadow:0 14px 34px rgba(0,0,0,.45); overflow:hidden; display:flex; flex-direction:column; position:relative; }
+  .ph .cap { position:absolute; top:8px; left:50%; transform:translateX(-50%); width:88px; height:22px; background:#0d1117; border-radius:12px; z-index:5; }
+  .lbl { color:#c8d2dc; font-size:12px; text-align:center; margin-top:8px; }
+  .hd { padding:36px 16px 10px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line); }
+  .hd b { font-size:16px; }
+  .hd .tag { margin-left:auto; font-size:10px; color:var(--acc); border:1px solid var(--acc); border-radius:20px; padding:2px 8px; }
+  .bd { flex:1; overflow:hidden; padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
+  .tabbar { display:flex; border-top:1px solid var(--line); background:#fbfcfd; }
+  .tabbar div { flex:1; text-align:center; font-size:10px; color:var(--sub); padding:9px 0 13px; }
+  .tabbar div.on { color:var(--acc); font-weight:700; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:11px 12px; }
+  .card h3 { font-size:13px; margin-bottom:2px; }
+  .card .s { font-size:11px; color:var(--sub); }
+  .btn { background:var(--acc); color:#fff; text-align:center; border-radius:12px; padding:12px; font-weight:700; }
+  .btn.ghost { background:#fff; color:var(--acc); border:1.5px solid var(--acc); }
+  .pill { display:inline-block; font-size:10px; padding:2px 8px; border-radius:20px; background:#e8f2fa; color:var(--acc); margin-right:4px; }
+  .pill.warn { background:#fdf3e0; color:#a06b00; }
+  .pill.ok { background:#e5f5ee; color:var(--ok); }
+  svg text { font-family:inherit; }
+  .toolrow { display:flex; gap:6px; }
+  .toolrow span { flex:1; text-align:center; font-size:11px; border:1px solid var(--line); border-radius:9px; padding:7px 0; background:#fff; color:var(--sub); }
+  .toolrow span.on { background:var(--acc); color:#fff; border-color:var(--acc); font-weight:700; }
+  table { width:100%; border-collapse:collapse; font-size:11px; }
+  td { padding:4px 2px; border-bottom:1px solid var(--line); }
+  td.r { text-align:right; font-variant-numeric:tabular-nums; }
+  .sum td { font-weight:700; border-bottom:none; }
+  .chat { flex:1; display:flex; flex-direction:column; gap:8px; overflow:hidden; }
+  .msg { max-width:86%; border-radius:14px; padding:9px 11px; font-size:12px; }
+  .msg.ai { background:var(--card); border:1px solid var(--line); align-self:flex-start; }
+  .msg.me { background:var(--acc); color:#fff; align-self:flex-end; }
+  .shot { border-radius:12px; overflow:hidden; border:1px solid var(--line); position:relative; }
+  .shot .tagv { position:absolute; left:8px; top:8px; background:rgba(13,17,23,.72); color:#fff; font-size:10px; border-radius:8px; padding:2px 8px; }
+  .grid9 { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .grid9 div { aspect-ratio:1; border-radius:8px; background:var(--card); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .kv { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; }
+  .kv b { font-variant-numeric:tabular-nums; }
+  .prog { height:7px; border-radius:5px; background:var(--line); overflow:hidden; }
+  .prog i { display:block; height:100%; width:64%; background:var(--acc); }
+</style>
+</head>
+<body>
+<h1>PlanShot — 실측 · 도면 · 견적 · AI 디자이너 <span style="font-size:12px;color:#9aa6b2">(앱 UI 시안 v1 · 2026-09-02)</span></h1>
+<p class="note">폰 한 대로: LiDAR 스캔 → 도면 자동 생성/편집 → 재료·노무 분리 견적 → DXF/CSV/렌더 → AI가 스타일 제안. 아래 6개 화면이 하단 탭 구조입니다.</p>
+<div class="row">
+
+  <!-- 1. 홈 -->
+  <div>
+    <div class="ph"><div class="cap"></div>
+      <div class="hd"><b>PlanShot</b><span class="tag">PRO</span></div>
+      <div class="bd">
+        <div class="btn">＋ 새 현장 스캔</div>
+        <div class="card"><h3>연희동 84㎡ 리모델링</h3><div class="s">3실 · 45.1㎡ 실측 · 어제</div>
+          <div style="margin-top:6px"><span class="pill">도면 완료</span><span class="pill ok">견적 872만</span></div></div>
+        <div class="card"><h3>성산동 오피스텔</h3><div class="s">1실 · 스캔만 완료 · 8/30</div>
+          <div style="margin-top:6px"><span class="pill warn">견적 대기</span></div></div>
+        <div class="card"><h3>망원동 카페</h3><div class="s">2실 · DXF 발행됨 · 8/26</div></div>
+        <div class="card" style="margin-top:auto"><div class="s">이번 달 발행: 도면 6 · 견적 4 · 렌더 9</div></div>
+      </div>
+      <div class="tabbar"><div class="on">홈</div><div>스캔</div><div>도면</div><div>3D</div><div>견적</div><div>AI</div></div>
+    </div>
+    <div class="lbl">① 홈 — 현장 목록</div>
+  </div>
+
+  <!-- 2. 스캔 -->
+  <div>
+    <div class="ph"><div class="cap"></div>
+      <div class="hd"><b>스캔</b><span class="tag">RoomPlan</span></div>
+      <div class="bd">
+        <div class="shot" style="height:300px;background:
+          linear-gradient(160deg,#38424e 0%,#232a33 70%);display:flex;align-items:center;justify-content:center">
+          <svg width="240" height="240" viewBox="0 0 240 240">
+            <g stroke="#7fd3ff" stroke-width="2" fill="rgba(127,211,255,.07)">
+              <path d="M30 40 L210 40 L210 150 L150 150 L150 200 L30 200 Z"/>
+            </g>
+            <g stroke="#ffd479" stroke-width="2"><line x1="90" y1="40" x2="120" y2="40"/></g>
+            <circle cx="120" cy="130" r="4" fill="#fff"/>
+            <text x="120" y="118" fill="#cfe8ff" font-size="11" text-anchor="middle">벽 4 · 문 1 · 창 2 인식</text>
+          </svg>
+          <div class="tagv">LiDAR 스캔 중 · 침실1</div>
+        </div>
+        <div class="prog"><i></i></div>
+        <div class="s" style="font-size:11px;color:var(--sub)">천천히 벽을 따라 이동하세요 — 개구부는 자동 인식됩니다</div>
+        <div class="card"><div class="kv"><span>거실</span><b class="pill ok">완료 26.0㎡</b></div>
+          <div class="kv"><span>침실1</span><b class="pill">진행 중</b></div>
+          <div class="kv"><span>욕실1</span><b class="pill warn">대기</b></div></div>
+        <div class="btn ghost">이 방 스캔 종료</div>
+      </div>
+      <div class="tabbar"><div>홈</div><div class="on">스캔</div><div>도면</div><div>3D</div><div>견적</div><div>AI</div></div>
+    </div>
+    <div class="lbl">② 스캔 — 방별 LiDAR 실측</div>
+  </div>
+
+  <!-- 3. 도면 -->
+  <div>
+    <div class="ph"><div class="cap"></div>
+      <div class="hd"><b>도면</b><span class="tag">실측 2D</span></div>
+      <div class="bd">
+        <div class="toolrow"><span class="on">선택</span><span>문+</span><span>창+</span><span>가벽</span><span>분할</span></div>
+        <div class="shot" style="height:290px;background:#fff;display:flex;align-items:center;justify-content:center">
+          <svg width="256" height="270" viewBox="0 0 256 270">
+            <g stroke="#1a1a1a" stroke-width="5" fill="none">
+              <path d="M18 20 H150 V120 H238 M150 20 H238 V120 M238 120 V240 H130 V180 H18 V20"/>
+            </g>
+            <g stroke="#1a1a1a" stroke-width="1.4" fill="none">
+              <path d="M70 20 A34 34 0 0 1 104 54 M70 20 L70 54" stroke-dasharray="3 3"/>
+            </g>
+            <g stroke="#3a7ca5" stroke-width="1.6"><line x1="18" y1="70" x2="18" y2="120"/><line x1="23" y1="70" x2="23" y2="120"/></g>
+            <rect x="150" y="132" width="88" height="108" fill="rgba(60,120,120,.05)"/>
+            <text x="84" y="105" font-size="12" fill="#111" text-anchor="middle" font-weight="700">거실</text>
+            <text x="84" y="120" font-size="9" fill="#667" text-anchor="middle">26.0㎡ · CH 2310</text>
+            <text x="194" y="185" font-size="11" fill="#111" text-anchor="middle" font-weight="700">침실1</text>
+            <text x="194" y="199" font-size="9" fill="#667" text-anchor="middle">15.1㎡</text>
+            <g fill="#157fbe"><rect x="145" y="15" width="10" height="10"/><rect x="145" y="115" width="10" height="10"/></g>
+            <g stroke="#c0392b" stroke-width="1" fill="none"><line x1="18" y1="256" x2="238" y2="256"/></g>
+            <text x="128" y="252" font-size="9" fill="#c0392b" text-anchor="middle">7,200</text>
+          </svg>
+        </div>
+        <div class="s" style="font-size:11px;color:var(--sub)">벽 선택 → 끝단 그립 드래그 · Space 문 방향 · 실측치 입력 보정</div>
+        <div class="toolrow"><span>실측 보정</span><span>직교 보정</span><span class="on">DXF 발행</span></div>
+      </div>
+      <div class="tabbar"><div>홈</div><div>스캔</div><div class="on">도면</div><div>3D</div><div>견적</div><div>AI</div></div>
+    </div>
+    <div class="lbl">③ 도면 — 편집 + DXF 도면세트</div>
+  </div>
+
+  <!-- 4. 3D -->
+  <div>
+    <div class="ph"><div class="cap"></div>
+      <div class="hd"><b>3D 스튜디오</b><span class="tag">🚶 워크스루</span></div>
+      <div class="bd">
+        <div class="shot" style="height:266px;background:linear-gradient(180deg,#eef3f7 0%,#dde6ee 100%);display:flex;align-items:center;justify-content:center">
+          <svg width="250" height="240" viewBox="0 0 250 240">
+            <polygon points="30,150 125,105 220,150 125,197" fill="#e8d9b8"/>
+            <polygon points="30,150 30,88 125,45 125,105" fill="#f2efe8"/>
+            <polygon points="125,105 125,45 220,88 220,150" fill="#e7e2d8"/>
+            <rect x="58" y="120" width="52" height="30" transform="skewY(-13)" fill="#8fb3c9" rx="3"/>
+            <rect x="150" y="152" width="44" height="26" transform="skewY(12)" fill="#b5936b" rx="3"/>
+            <circle cx="88" cy="78" r="4" fill="#ffd479"/><circle cx="130" cy="70" r="4" fill="#ffd479"/><circle cx="172" cy="92" r="4" fill="#ffd479"/>
+            <text x="125" y="228" font-size="10" fill="#66727f" text-anchor="middle">조명 그리드 — 실 크기 따라 자동 정렬</text>
+          </svg>
+        </div>
+        <div class="toolrow"><span class="on">재료 보기</span><span>조명 효과</span><span>천장</span><span>가구</span></div>
+        <div class="card"><div class="kv"><span>거실 · 다운라이트 3"</span><b>35,000원/개</b></div>
+          <div class="s">재료 18,000 + 노무 17,000 · 그리드 21점 중 3점 설치</div></div>
+        <div class="toolrow"><span>🚶 걷기</span><span class="on">📷 렌더샷</span></div>
+      </div>
+      <div class="tabbar"><div>홈</div><div>스캔</div><div>도면</div><div class="on">3D</div><div>견적</div><div>AI</div></div>
+    </div>
+    <div class="lbl">④ 3D — 재료 확인 · 걷기 · 렌더</div>
+  </div>
+
+  <!-- 5. 견적 -->
+  <div>
+    <div class="ph"><div class="cap"></div>
+      <div class="hd"><b>견적</b><span class="tag">재료·노무 분리</span></div>
+      <div class="bd">
+        <div class="card">
+          <div class="kv"><span>재료비</span><b>3,254,345원</b></div>
+          <div class="kv"><span>노무비</span><b>3,842,423원</b></div>
+          <div class="kv"><span>부가세 10%</span><b>709,677원</b></div>
+          <div class="kv" style="font-size:14px"><span><b>총계</b></span><b style="color:var(--acc)">7,806,445원</b></div>
+        </div>
+        <table>
+          <tr><td>■ 거실</td><td class="r"></td><td class="r"></td></tr>
+          <tr><td>강마루 26.0㎡</td><td class="r">25,000</td><td class="r">936,000</td></tr>
+          <tr><td>실크벽지 39.3㎡</td><td class="r">2,500+5,500</td><td class="r">314,560</td></tr>
+          <tr><td>간접등 박스 22m</td><td class="r">18,000+42,000</td><td class="r">1,320,000</td></tr>
+          <tr class="sum"><td>거실 소계</td><td class="r"></td><td class="r">2,570,560</td></tr>
+        </table>
+        <div class="card"><div class="s">노무 품 환산: 목공 6.0 · 도배 3.3 · 타일 2.7품<br>
+          철거 폐기물 ≈ <b>1.6톤</b> (2.5톤 차량 1대) — 폐기 가구 3점 포함</div></div>
+        <div class="toolrow"><span>CSV</span><span class="on">견적서 PDF</span><span>공유</span></div>
+      </div>
+      <div class="tabbar"><div>홈</div><div>스캔</div><div>도면</div><div>3D</div><div class="on">견적</div><div>AI</div></div>
+    </div>
+    <div class="lbl">⑤ 견적 — 품·철거 톤까지</div>
+  </div>
+
+  <!-- 6. AI 디자이너 -->
+  <div>
+    <div class="ph"><div class="cap"></div>
+      <div class="hd"><b>AI 디자이너</b><span class="tag">뷰포인트</span></div>
+      <div class="bd">
+        <div class="shot" style="height:150px;background:linear-gradient(165deg,#d8c9b2 0%,#b7a488 55%,#8d8272 100%);display:flex;align-items:flex-end">
+          <div class="tagv">📍 거실 · 소파 방향 시점 (걷기에서 캡처)</div>
+          <div style="width:100%;height:44%;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(60,45,25,.35))"></div>
+        </div>
+        <div class="chat">
+          <div class="msg me">이 시점을 우드+베이지 미니멀로, 간접등 위주로 바꿔줘</div>
+          <div class="msg ai">리스타일 이미지를 만들었어요. 적용하려면 이 공간에 필요한 변경 6건:
+            <div style="margin-top:6px">
+              <span class="pill">바닥 → 강마루 오크</span><span class="pill">벽 → 실크 그레이지</span><br>
+              <span class="pill">커튼박스 간접등 22m</span><span class="pill">TV장 → 로우보드 1800</span><br>
+              <span class="pill warn">소파 교체 (기존 반출 40kg)</span>
+            </div>
+            <div class="s" style="margin-top:6px">예상 증감 +182만원 · 목공 +1.5품</div></div>
+        </div>
+        <div class="btn">제안 6건 도면·견적에 적용</div>
+        <div class="grid9" style="grid-template-columns:repeat(4,1fr)">
+          <div>🖼</div><div>🛋</div><div>💡</div><div>🎨</div>
+        </div>
+      </div>
+      <div class="tabbar"><div>홈</div><div>스캔</div><div>도면</div><div>3D</div><div>견적</div><div class="on">AI</div></div>
+    </div>
+    <div class="lbl">⑥ AI — 시점 리스타일 → 적용 제안</div>
+  </div>
+
+</div>
+<p class="note" style="margin-top:16px">흐름: ①현장 → ②방별 스캔 → ③도면 확정(편집·치수·DXF) → ④3D 확인(걷기·렌더) → ⑤견적(재료/노무/철거) → ⑥AI 제안을 다시 도면·견적에 반영. PC 미니BIM은 이 구조의 데스크톱 작업대이고, 앱은 같은 plan.json을 공유합니다.</p>
+</body>
+</html>
