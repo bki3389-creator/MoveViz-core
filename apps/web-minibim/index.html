@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PlanShot 미니BIM — 실측 → 3D → 견적</title>
 <link rel="stylesheet" href="./css/style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three.module.js",
+  "three-mesh-bvh": "./vendor/three-mesh-bvh.module.js",
+  "three-gpu-pathtracer": "./vendor/three-gpu-pathtracer.module.js",
+  "three/examples/jsm/postprocessing/Pass.js": "./vendor/Pass.js"
+} }
+</script>
 </head>
 <body>
 <header id="topbar">
@@ -50,6 +58,7 @@
       <label class="chk"><input type="checkbox" id="chkCeil"> 천장</label>
       <label class="chk" title="끄면 밝고 균일한 재료 확인 모드"><input type="checkbox" id="chkFX"> 조명효과</label>
       <label class="chk"><input type="checkbox" id="chkFurn" checked> 가구</label>
+      <button id="btnShot" class="vtab small" title="패스트레이싱 실사 렌더 (three-gpu-pathtracer)">📷 렌더샷</button>
       <button id="btnFrame" class="vtab small" title="전체 보기">⤢</button>
     </div>
     <div id="pane2d"><canvas id="cv2d"></canvas></div>
@@ -68,6 +77,19 @@
   </aside>
 </div>
 
+<div id="shotModal" hidden>
+  <div class="shot-box">
+    <div class="shot-head">
+      <b>실사 렌더샷</b><span id="shotProg"></span>
+      <div class="spacer"></div>
+      <button id="shotStop" class="btn ghost">중지</button>
+      <a id="shotSave" class="btn accent" download="렌더샷.png" style="display:none;text-decoration:none">PNG 저장</a>
+      <button id="shotClose" class="btn ghost">닫기</button>
+    </div>
+    <canvas id="shotCanvas"></canvas>
+    <div class="disc" style="padding:6px 10px">three-gpu-pathtracer(MIT) — 샘플이 쌓일수록 선명해집니다. 조명효과 없이도 스튜디오 환경광으로 렌더됩니다.</div>
+  </div>
+</div>
 <div id="printArea"></div>
 <script type="module" src="./js/main.js"></script>
 </body>

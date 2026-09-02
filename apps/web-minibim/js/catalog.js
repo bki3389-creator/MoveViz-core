@@ -244,6 +244,33 @@ export function roomTypeOf(name) {
   return '방';
 }
 
+// 직종 일당(2026 공표노임 반올림+시장 실세) — 노무 품(인·일) 환산 참고용
+export const DAY_RATES = {
+  '도배': 230000, '타일': 290000, '도장': 260000, '필름·내장': 260000,
+  '목공': 280000, '전기': 270000, '설비': 250000, '철거·보통인부': 175000, '마루': 260000,
+};
+// 항목(기본 id) → 직종. 노무비를 직종별로 모아 "몇 품인지" 환산한다.
+export const CREW_OF = {
+  wl_silk: '도배', wl_paper: '도배', wl_mural: '도배', cl_silk: '도배', cl_paper: '도배',
+  wl_paint: '도장', wl_venpaint: '도장', cl_paint: '도장',
+  wl_film: '필름·내장', wl_wains: '목공', wl_wood: '목공', wl_brick: '타일', wl_stone: '타일', wl_tile: '타일',
+  fl_laminate: '마루', fl_lamin12: '마루', fl_ondol: '마루', fl_hardwood: '마루', fl_herring: '마루',
+  fl_sheet18: '마루', fl_sheet45: '마루', fl_decotile: '마루',
+  fl_tile600: '타일', fl_tile300: '타일', fl_polish: '타일',
+  ct_flat: '목공', ct_well: '목공', ct_indirect: '목공', ct_nomold: '목공', ct_exposed: '목공',
+  wt_stud: '목공', wt_wood: '목공', wt_glass: '목공', wt_demo: '철거·보통인부',
+  lt_down3: '전기', lt_down6: '전기', lt_edge: '전기', lt_pendant: '전기', lt_ceilfan: '전기',
+  lt_sensor: '전기', lt_line: '전기', lt_indT5: '전기', lt_mag: '전기',
+  tr_base: '목공', tr_mold: '목공',
+  w_demo: '철거·보통인부', w_clean: '철거·보통인부', w_switch: '전기', w_wiring: '전기',
+  w_panel: '전기', w_dedic: '전기', w_boiler: '설비', w_pipes: '설비', w_aircon: '설비',
+  w_toilet: '설비', w_basin: '설비', w_bathfaucet: '설비',
+  w_door_leaf: '목공', w_door_set: '목공', w_door_paint: '필름·내장', w_handle: '목공',
+  w_builtin: '목공', w_sto_film: '필름·내장', w_shelf: '목공', w_artwall: '목공',
+  w_entdoor: '필름·내장', w_sash_film: '필름·내장', w_insul: '목공', w_deck: '타일',
+};
+export function crewOf(id) { return CREW_OF[String(id).split('#')[0]]; }
+
 // 구버전 프로젝트 호환
 export const LEGACY_IDS = { fl_sheet: 'fl_sheet18' };
 export function canonId(id) { return LEGACY_IDS[id] || id; }

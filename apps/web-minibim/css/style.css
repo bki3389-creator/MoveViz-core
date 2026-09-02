@@ -78,6 +78,8 @@ aside { background: var(--panel); overflow-y: auto; }
 .est-sum .tot { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; font-size: 14px; }
 .est-sum .tot b { color: var(--accent); }
 .est-sum .disc { font-size: 10px; color: var(--sub); display: block; margin-top: 4px; }
+.est-sum .crewdays { font-size: 10.5px; color: var(--ink); margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.est-sum .crewdays span { display: block; font-size: 9.5px; color: var(--warn); margin-top: 2px; }
 #estDetail { padding: 8px 12px; }
 #estDetail summary { cursor: pointer; font-size: 11px; color: var(--sub); margin-bottom: 6px; }
 table.est { width: 100%; border-collapse: collapse; font-size: 11px; }
@@ -119,3 +121,13 @@ table.est tr.tot td { color: var(--accent); font-size: 12px; }
   body { overflow: auto; }
   #center { height: 60vh; }
 }
+
+/* 렌더샷 모달 */
+#shotModal { position: fixed; inset: 0; background: rgba(10,14,20,.55); z-index: 50;
+  display: flex; align-items: center; justify-content: center; }
+#shotModal[hidden] { display: none; }
+.shot-box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  max-width: min(92vw, 1000px); overflow: hidden; box-shadow: 0 12px 40px rgba(10,20,35,.25); }
+.shot-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.shot-head span { font-size: 12px; color: var(--sub); }
+#shotCanvas { display: block; width: min(88vw, 960px); height: auto; background: #dde3ea; }

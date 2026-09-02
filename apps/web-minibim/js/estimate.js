@@ -2,7 +2,7 @@
 // RhinoBIM `bq`(물량 CSV)의 웹판: 모델을 바꾸면 즉시 재계산된다.
 
 import { state, emit, metricsOf, wallsOf } from './state.js';
-import { item, ratesOf, KRW, CEIL_TYPES, canonId } from './catalog.js';
+import { item, ratesOf, KRW, CEIL_TYPES, canonId, crewOf, DAY_RATES } from './catalog.js';
 
 const isWet = name => /욕실|화장실|발코니|베란다/.test(name || '');
 
@@ -64,11 +64,21 @@ export function buildEstimate() {
   const subM = rows.reduce((s, x) => s + x.amountM, 0);
   const subL = rows.reduce((s, x) => s + x.amountL, 0);
   const vat = sub * (P.vatPct || 0) / 100;
-  return { rows, sub, subM, subL, vat, total: sub + vat };
+  // 노무 품(인·일) 환산 — 직종별 노무비 합계 ÷ 일당. 1품 미만 공종은 실제 일당 청구 가능성 경고.
+  const crews = {};
+  for (const x of rows) {
+    const c = crewOf(x.id);
+    if (!c || x.amountL <= 0) continue;
+    crews[c] = (crews[c] || 0) + x.amountL;
+  }
+  const laborDays = Object.entries(crews).map(([c, won]) => ({
+    crew: c, won, days: won / (DAY_RATES[c] || 250000),
+  })).sort((a, b) => b.won - a.won);
+  return { rows, sub, subM, subL, vat, total: sub + vat, laborDays };
 }
 
 export function renderEstimate(elSummary, elTable) {
-  const { rows, sub, subM, subL, vat, total } = buildEstimate();
+  const { rows, sub, subM, subL, vat, total, laborDays } = buildEstimate();
   elSummary.innerHTML = `
     <div class="est-sum">
       <div><span>재료비</span><b>${KRW(Math.round(subM))}원</b></div>
@@ -77,6 +87,9 @@ export function renderEstimate(elSummary, elTable) {
       <div><span>부가세 ${state.project?.vatPct ?? 10}%</span><b>${KRW(Math.round(vat))}원</b></div>
       <div class="tot"><span>총계</span><b>${KRW(Math.round(total))}원</b></div>
       <div class="disc">참고 단가(재료/노무 분리) — 표에서 우리 회사 단가로 수정하세요</div>
+      ${laborDays?.length ? `<div class="crewdays">노무 품 환산(참고): ${laborDays.map(d =>
+        `${d.crew} ${d.days.toFixed(1)}품${d.days < 1 ? '⚠' : ''}`).join(' · ')}
+        <span>⚠ = 1품(1일) 미만 — 실제로는 일당 단위 청구될 수 있어 소량 공정은 상향 조정 권장</span></div>` : ''}
     </div>`;
 
   let html = `<table class="est"><thead><tr>

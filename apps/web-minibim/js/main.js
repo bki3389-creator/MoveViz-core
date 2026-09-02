@@ -5,7 +5,7 @@ import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore, ad
          updateOpening, removeOpening, removeInnerWall, scaleRoom,
          addFurniture, rotateFurniture, resizeFurniture, removeFurniture, arrangeRooms } from './state.js';
 import { init2D, render2d, renderRoomImage, cancelWallDraw } from './plan2d.js';
-import { init3D, rebuild3D, frameAll, clearHighlight } from './scene3d.js';
+import { init3D, rebuild3D, frameAll, clearHighlight, getSceneRefs } from './scene3d.js';
 import { renderEstimate, exportCSV, buildEstimate } from './estimate.js';
 import { exportDXF } from './dxf.js';
 import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS, FURN_ITEMS,
@@ -49,6 +49,7 @@ rebuild3D(); frameAll(); emit('init');
   }
   if (q.get('ceil') === '1') { state.showCeiling = true; $('chkCeil').checked = true; }
   if (q.get('tab') === '2d' || q.get('tab') === '3d') setTab(q.get('tab'));
+  if (q.has('rendershot')) setTimeout(() => runRenderShot(Number(q.get('rendershot')) || 24, 640, 400), 800);
   if (q.has('sample') || q.get('ceil') === '1') { rebuild3D(); emit('select'); }
 })();
 
@@ -141,6 +142,32 @@ $('chkCeil').onchange = e => { state.showCeiling = e.target.checked; rebuild3D()
 $('chkFX').onchange = e => { state.lightFX = e.target.checked; rebuild3D(); };
 $('chkFurn').onchange = e => { state.showFurniture = e.target.checked; rebuild3D(); render2d(); };
 $('btnFrame').onclick = () => frameAll();
+$('btnShot').onclick = () => runRenderShot();
+async function runRenderShot(sampleTarget = 200, w = 1280, h = 800) {
+  const { renderShot, stopRender, isRendering } = await import('./render.js');
+  if (isRendering()) return;
+  setTab('3d');
+  const modal = $('shotModal'), cv2 = $('shotCanvas');
+  modal.hidden = false;
+  $('shotSave').style.display = 'none';
+  $('shotProg').textContent = '준비 중…';
+  $('shotStop').onclick = () => stopRender();
+  $('shotClose').onclick = () => { stopRender(); modal.hidden = true; };
+  const { root, camera } = getSceneRefs();
+  const url = await renderShot(root, camera, cv2, {
+    width: w, height: h, samples: sampleTarget,
+    onProgress: (n, t) => { $('shotProg').textContent = `샘플 ${n}/${t}`; },
+  });
+  if (url) {
+    $('shotProg').textContent += ' · 완료';
+    const a = $('shotSave');
+    a.href = url;
+    a.download = (state.project?.name || '미니빔') + '_렌더샷.png';
+    a.style.display = '';
+  } else {
+    $('shotProg').textContent = '렌더 실패 (콘솔 확인)';
+  }
+}
 $('btnArrange').onclick = () => { if (confirm('방 배치를 일렬로 초기화할까요?')) { arrangeRooms(); frameAll(); } };
 
 function syncToolbar() {

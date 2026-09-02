@@ -608,6 +608,8 @@ export function clearHighlight() {
   highlight = null;
 }
 
+export function getSceneRefs() { return { scene, camera, renderer, root }; }
+
 export function frameAll() {
   const box = new THREE.Box3().setFromObject(root);
   if (box.isEmpty()) return;
