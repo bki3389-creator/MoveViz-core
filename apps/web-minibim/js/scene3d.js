@@ -301,6 +301,10 @@ function floorTexture(finishId, baseColor) {
   texCache.set(fk, tex);
   return tex;
 }
+const FM = {
+  wood: 0x9a7b52, woodDark: 0x7a5f3e, fabric: 0x93a7b1, fabricDark: 0x7b8f99,
+  white: 0xf2f2ef, metal: 0xdadee2, dark: 0x3a3f45, glass: 0x9fc4dd, bedding: 0xdfe6e2,
+};
 function furnMat(color, rough) {
   if (color === FM.wood || color === FM.woodDark) {
     if (!furnWoodCv) {   // 나뭇결 캔버스 1회 생성

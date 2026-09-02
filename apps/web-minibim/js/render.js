@@ -44,7 +44,7 @@ export async function renderShot(root, camera, canvas, {
   renderer.toneMappingExposure = 1.1;
 
   // 방 지오메트리만 복제한 전용 씬 — GridHelper 등 헬퍼(LineSegments)는 패스트레이서가 못 다룸
-  const envTex = natureEquirect(512);   // 패스트레이서 env는 소형(중요도 샘플링 CDF 비용 절감)
+  const envTex = natureEquirect(1024);   // env는 중형 — 품질/CDF 비용 균형
   const scene = new THREE.Scene();
   scene.background = envTex;
   scene.environment = envTex;
@@ -60,7 +60,7 @@ export async function renderShot(root, camera, canvas, {
     const m2 = obj.material;
     if (m2?.emissive && (m2.emissiveIntensity ?? 0) > 0.5 && m2.emissive.getHex() !== 0) {
       obj.material = m2.clone();       // clone(true)는 재질을 공유 — 라이브 씬 오염 금지
-      obj.material.emissiveIntensity = 14;   // 패스트레이서에서 실제 광원 역할
+      obj.material.emissiveIntensity = 20;   // 패스트레이서에서 실제 광원 역할
     }
   });
   scene.add(model);
@@ -86,7 +86,7 @@ export async function renderShot(root, camera, canvas, {
   cam.updateProjectionMatrix();
 
   const pt = new WebGLPathTracer(renderer);
-  pt.bounces = 4;
+  pt.bounces = 5;
   pt.renderScale = 1;
   pt.tiles.set(3, 3);   // 프레임당 부하 분산 — UI 응답성
   try {
