@@ -3,12 +3,15 @@
 // 오픈소스 전수조사 톱5 중 "설치만으로 적용 가능한" 1순위 이식.
 
 import * as THREE from '../vendor/three.module.js';
-import { WebGLPathTracer, GradientEquirectTexture } from 'three-gpu-pathtracer';
+import { WebGLPathTracer } from 'three-gpu-pathtracer';
+import { natureEquirect } from './scene3d.js';
 
 let running = false, stopFlag = false;
 
 export function isRendering() { return running; }
 export function stopRender() { stopFlag = true; }
+/// 강제 종료 — 느린 샘플/걸린 컴파일로 안 멈출 때 상태를 리셋(다음 렌더 즉시 가능)
+export function forceReset() { stopFlag = true; running = false; }
 
 /// scene/camera 를 받아 modalCanvas 에 프로그레시브 패스트레이싱.
 /// onProgress(samples, target) 콜백. 완료/중지 시 resolve(dataURL).
@@ -41,12 +44,9 @@ export async function renderShot(root, camera, canvas, {
   renderer.toneMappingExposure = 1.1;
 
   // 방 지오메트리만 복제한 전용 씬 — GridHelper 등 헬퍼(LineSegments)는 패스트레이서가 못 다룸
-  const envTex = new GradientEquirectTexture();
-  envTex.topColor.set(0xe3ecf5);
-  envTex.bottomColor.set(0x9aa1a8);
-  envTex.update();
+  const envTex = natureEquirect();   // 창밖 = 자연 (환경광에도 녹색·하늘빛 반사)
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xdfe6ee);
+  scene.background = envTex;
   scene.environment = envTex;
   // three r160 호환 심: r162+에서 추가된 회전 속성을 pathtracer가 읽는다
   scene.environmentRotation = new THREE.Euler();
@@ -59,7 +59,8 @@ export async function renderShot(root, camera, canvas, {
     if (obj.userData?.isCeil) obj.visible = true;
     const m2 = obj.material;
     if (m2?.emissive && (m2.emissiveIntensity ?? 0) > 0.5 && m2.emissive.getHex() !== 0) {
-      m2.emissiveIntensity = 14;   // 패스트레이서에서 실제 광원 역할
+      obj.material = m2.clone();       // clone(true)는 재질을 공유 — 라이브 씬 오염 금지
+      obj.material.emissiveIntensity = 14;   // 패스트레이서에서 실제 광원 역할
     }
   });
   scene.add(model);
@@ -68,6 +69,12 @@ export async function renderShot(root, camera, canvas, {
   sun.position.set(6, 9, -7);
   scene.add(sun);
   scene.add(sun.target);
+  // 잔디 지면 — 건물 주변 자연 바닥
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 48),
+    new THREE.MeshStandardMaterial({ color: 0x8fa87e, roughness: 1 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.03;
+  scene.add(ground);
 
   const cam = camera.clone();
   if (camPose) {

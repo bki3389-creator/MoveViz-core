@@ -172,10 +172,11 @@ function interiorPose() {
 }
 async function runRenderShot(sampleTarget = 220, w = 1120, h = 700, mode = 'auto') {
   const { renderShot, stopRender, isRendering } = await import('./render.js');
-  if (isRendering()) {           // 재클릭 먹통 방지: 이전 렌더를 중지시키고 이어서 시작
+  if (isRendering()) {           // 재클릭: 이전 렌더 중지 → 최대 4초 대기 → 강제 종료 후 새로 시작
     stopRender();
-    await new Promise(r2 => setTimeout(r2, 400));
-    if (isRendering()) { alert('이전 렌더 종료 중 — 잠시 후 다시 눌러주세요'); return; }
+    const { forceReset } = await import('./render.js');
+    for (let k2 = 0; k2 < 20 && isRendering(); k2++) await new Promise(r2 => setTimeout(r2, 200));
+    if (isRendering()) forceReset();   // 샘플 프레임이 길어 안 멈추면 강제 리셋
   }
   setTab('3d');
   const modal = $('shotModal'), cv2 = $('shotCanvas');
@@ -183,7 +184,11 @@ async function runRenderShot(sampleTarget = 220, w = 1120, h = 700, mode = 'auto
   $('shotSave').style.display = 'none';
   $('shotProg').textContent = '준비 중…';
   $('shotStop').onclick = () => stopRender();
-  $('shotClose').onclick = () => { stopRender(); modal.hidden = true; };
+  $('shotClose').onclick = async () => {
+    stopRender(); modal.hidden = true;
+    const { forceReset } = await import('./render.js');
+    setTimeout(() => { if (isRendering()) forceReset(); }, 1500);   // 닫기 = 확실한 종료
+  };
   $('shotView').onclick = () => { stopRender(); setTimeout(() => runRenderShot(sampleTarget, w, h,
     mode === 'overview' || (mode === 'auto' && interiorPose()) ? 'overview2' : 'auto'), 300); };
   // overview2 → 실내↔전체 토글용: 'overview'로 정규화

@@ -394,9 +394,9 @@ function paintRoom(g, r, off, P, s, th, interactive) {
 function hitAt(wx, wz) {
   const offs = layoutOffsets();
   const tol = 12 / S();   // 화면 12px 허용
-  // 선택 벽의 끝단 그립 최우선 (코너 드래그)
+  // 선택 벽의 끝단 그립 최우선 (코너 드래그) — select 도구일 때만(문/창/분할 클릭 방해 금지)
   const sg = state.sel;
-  if (sg?.kind === 'wall' && /^b\d+$/.test(sg.wallKey)) {
+  if ((state.tool2d || 'select') === 'select' && sg?.kind === 'wall' && /^b\d+$/.test(sg.wallKey)) {
     const rG = (state.project?.rooms || []).find(x => x.id === sg.roomId);
     const oG = rG && offs[rG.id];
     if (oG) {
@@ -442,12 +442,17 @@ function hitAt(wx, wz) {
       const t = w.dir === 'z' ? lx : lz;                          // 벽 축상 좌표
       const dist = w.dir === 'z' ? Math.abs(lz - w.pos) : Math.abs(lx - w.pos);
       if (dist > Math.max(tol, 0.12) || t < w.lo - 0.1 || t > w.hi + 0.1) continue;
+      let foreignHit = false;
       for (const op of w.openings) {
-        if (op.foreign) continue;
+        if (op.foreign) {
+          if (t >= op.lo - 0.05 && t <= op.hi + 0.05) foreignHit = true;
+          continue;
+        }
         if (t >= op.lo - 0.05 && t <= op.hi + 0.05) {
           return { kind: 'opening', r, openingIdx: op.idx, wall: w, t };
         }
       }
+      if (foreignHit) continue;   // 상대 방 소유 개구부 — 그 방 순회에서 잡히도록 양보
       return { kind: 'wall', r, wall: w, t };
     }
     if (inPoly(lx, lz, r.plan.boundary || [])) return { kind: 'room', r, lx, lz };

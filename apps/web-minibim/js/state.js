@@ -485,17 +485,30 @@ export function removeInnerWall(r, key) {
 }
 
 /// 벽 위치 이동: 내부벽 = pos 변경 / 외곽 변 = 그 변의 두 꼭짓점을 법선축으로 이동(직교 평면 유지).
+/// 변이 법선으로 이동할 때, 그 변 구간([lo,hi])에 실린 개구부만 wall_pos 동기화.
+/// 같은 선상의 다른 조각(스플릿 결과 등) 개구부를 끌고 가지 않는다(감사 확정 결함).
+function syncEdgeOpenings(plan, dir, oldPos, newPos, lo, hi) {
+  if (Math.abs(oldPos - newPos) < 1e-9) return;
+  for (const op of plan.openings || []) {
+    if (op.wall_dir !== dir || op.wall_pos == null || !op.span) continue;
+    if (Math.abs(op.wall_pos - oldPos) > 0.09) continue;
+    const s0 = Math.min(op.span[0], op.span[1]), s1 = Math.max(op.span[0], op.span[1]);
+    if (s1 < lo - 0.05 || s0 > hi + 0.05) continue;
+    op.wall_pos = newPos;
+  }
+}
+
 export function moveWall(r, wallKey, newPos, silent) {
   const np = snap(newPos);
   let m = wallKey.match(/^([xz])(\d+)_(\d+)$/);
   if (m) {
     const arr = m[1] === 'x' ? r.plan.xw : r.plan.zw;
-    if (arr[+m[2]]) {
-      arr[+m[2]].pos = np;
-      // 붙은 개구부의 wall_pos 동기화
-      r.plan.openings.forEach(op => {
-        if (op.wall_dir === m[1] && Math.abs((op.wall_pos ?? 1e9) - (arr[+m[2]]._prev ?? np)) < 0.3) op.wall_pos = np;
-      });
+    const w2 = arr[+m[2]];
+    if (w2) {
+      const old = w2.pos;   // 이동 전 위치 기준으로 동기화(빠른 드래그 이탈 방지)
+      w2.pos = np;
+      const ts = (w2.segs || []).flat();
+      if (ts.length) syncEdgeOpenings(r.plan, m[1], old, np, Math.min(...ts), Math.max(...ts));
       if (!silent) emit('project'); return true;
     }
     return false;
@@ -507,11 +520,10 @@ export function moveWall(r, wallKey, newPos, silent) {
     if (!a || !b) return false;
     const horiz = Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]);
     const old = horiz ? a[1] : a[0];
+    const elo = horiz ? Math.min(a[0], b[0]) : Math.min(a[1], b[1]);
+    const ehi = horiz ? Math.max(a[0], b[0]) : Math.max(a[1], b[1]);
     if (horiz) { a[1] = np; b[1] = np; } else { a[0] = np; b[0] = np; }
-    // 이 변 위 개구부의 wall_pos 동기화
-    r.plan.openings.forEach(op => {
-      if (op.wall_dir === (horiz ? 'z' : 'x') && Math.abs((op.wall_pos ?? 1e9) - old) < 0.18) op.wall_pos = np;
-    });
+    syncEdgeOpenings(r.plan, horiz ? 'z' : 'x', old, np, elo, ehi);   // 이 변 구간의 개구부만 동반
     syncRoomPolys(r);
     if (!silent) emit('project'); return true;
   }
@@ -540,7 +552,7 @@ export function lightGridOf(r) {
 
 /// 벽 분할(원본 미니빔 split 이식): 외곽 변에 점 2개 삽입(클릭점 ±0.45m)
 /// → 가운데 조각(b<i+1>)을 선택해 법선으로 드래그하면 단(notch)이 된다.
-/// 반환: 가운데 조각 변 인덱스, 실패 시 -1. ⚠ 분할 뒤 그 방 b키가 +2 밀림(벽별 지정 마감 주의).
+/// 반환: 가운데 조각 변 인덱스, 실패 시 -1. 분할 뒤 b키 +4 밀림 — wallOverrides/wallTypes 자동 리매핑.
 export function splitWall(r, wallKey, t) {
   const m2 = wallKey.match(/^b(\d+)$/); if (!m2) return -1;
   const bd = r.plan.boundary; if (!bd || bd.length < 3) return -1;
@@ -549,9 +561,28 @@ export function splitWall(r, wallKey, t) {
   const horiz = Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]);
   const lo = horiz ? Math.min(a[0], b[0]) : Math.min(a[1], b[1]);
   const hi = horiz ? Math.max(a[0], b[0]) : Math.max(a[1], b[1]);
-  const c0 = snap(Math.max(lo + 0.15, t - 0.45));
-  const c1 = snap(Math.min(hi - 0.15, t + 0.45));
+  let c0 = snap(Math.max(lo + 0.15, t - 0.45));
+  let c1 = snap(Math.min(hi - 0.15, t + 0.45));
   if (c1 - c0 < 0.2) return -1;
+  // 절단 창이 문/창 스팬을 관통하지 않게 회피(좌우로 탐색, 못 찾으면 실패)
+  const edgePos = horiz ? a[1] : a[0];
+  const blocked = (r.plan.openings || [])
+    .filter(op => op.wall_dir === (horiz ? 'z' : 'x') && op.span
+      && Math.abs((op.wall_pos ?? 1e9) - edgePos) < 0.09)
+    .map(op => [Math.min(op.span[0], op.span[1]) - 0.1, Math.max(op.span[0], op.span[1]) + 0.1]);
+  const clash = (x0, x1) => blocked.some(([b0, b1]) => x1 > b0 && x0 < b1);
+  if (clash(c0, c1)) {
+    let found = false;
+    for (let d3 = 0.1; d3 <= hi - lo && !found; d3 += 0.1) {
+      for (const sg2 of [1, -1]) {
+        const t2 = t + sg2 * d3;
+        const a0 = snap(Math.max(lo + 0.15, t2 - 0.45)), b0 = snap(Math.min(hi - 0.15, t2 + 0.45));
+        if (b0 - a0 < 0.2 || clash(a0, b0)) continue;
+        c0 = a0; c1 = b0; found = true; break;
+      }
+    }
+    if (!found) return -1;
+  }
   pushHistory(r);
   const fwd = (horiz ? b[0] - a[0] : b[1] - a[1]) >= 0;
   const [t0, t1] = fwd ? [c0, c1] : [c1, c0];
@@ -559,6 +590,16 @@ export function splitWall(r, wallKey, t) {
   // 원본 미니빔 방식: A—C—C'—D'—D—B (C'=C, D'=D 로 시작) — 가운데 C'—D' 조각을
   // 법선으로 끌면 C—C', D'—D 가 수직 연결 스텁이 되어 단(notch)이 만들어진다.
   bd.splice(i + 1, 0, mk(t0), mk(t0), mk(t1), mk(t1));
+  // 삽입 지점 뒤 b키 +4 리매핑 — 벽별 마감/유형 지정이 엉뚱한 벽으로 가지 않게
+  for (const dict of [r.wallOverrides, r.wallTypes]) {
+    if (!dict) continue;
+    const ent = Object.entries(dict).filter(([k2]) => /^b\d+$/.test(k2));
+    for (const [k2] of ent) delete dict[k2];
+    for (const [k2, v2] of ent) {
+      const n2 = Number(k2.slice(1));
+      dict[n2 > i ? 'b' + (n2 + 4) : k2] = v2;
+    }
+  }
   syncRoomPolys(r);
   emit('project');
   return i + 2;
@@ -570,10 +611,32 @@ export function moveCorner(r, vi, nx2, nz2, silent) {
   const N = bd.length;
   const p = bd[(vi - 1 + N) % N], c = bd[vi], q = bd[(vi + 1) % N];
   const ox = snap(nx2), oz = snap(nz2);
-  if (Math.abs(p[1] - c[1]) < 1e-6 && Math.abs(p[0] - c[0]) > 1e-6) p[1] = oz;
-  else if (Math.abs(p[0] - c[0]) < 1e-6 && Math.abs(p[1] - c[1]) > 1e-6) p[0] = ox;
-  if (Math.abs(q[1] - c[1]) < 1e-6 && Math.abs(q[0] - c[0]) > 1e-6) q[1] = oz;
-  else if (Math.abs(q[0] - c[0]) < 1e-6 && Math.abs(q[1] - c[1]) > 1e-6) q[0] = ox;
+  const oldCx = c[0], oldCz = c[1];
+  // 이웃 판정: 수평/수직 변은 직교 동행 + 그 변 개구부 동기.
+  // 0길이 스텁(스플릿 중복점)은 짝으로 함께 이동하고, 그 '너머' 이웃을 한 홉 더 동행(찢김 방지).
+  const orthoFollow = (u) => {
+    const zx = Math.abs(u[0] - oldCx) < 1e-6, zz = Math.abs(u[1] - oldCz) < 1e-6;
+    if (zx && zz) return 'zero';
+    if (zz && !zx) {   // 수평 이웃 변 (dir 'z')
+      syncEdgeOpenings(r.plan, 'z', oldCz, oz, Math.min(u[0], oldCx), Math.max(u[0], oldCx));
+      u[1] = oz; return 'h';
+    }
+    if (zx && !zz) {   // 수직 이웃 변 (dir 'x')
+      syncEdgeOpenings(r.plan, 'x', oldCx, ox, Math.min(u[1], oldCz), Math.max(u[1], oldCz));
+      u[0] = ox; return 'v';
+    }
+    return 'diag';
+  };
+  if (orthoFollow(p) === 'zero') {
+    p[0] = ox; p[1] = oz;
+    const pp = bd[(vi - 2 + N) % N];
+    if (pp !== c && pp !== q) orthoFollow(pp);
+  }
+  if (orthoFollow(q) === 'zero') {
+    q[0] = ox; q[1] = oz;
+    const qq = bd[(vi + 2) % N];
+    if (qq !== c && qq !== p) orthoFollow(qq);
+  }
   c[0] = ox; c[1] = oz;
   syncRoomPolys(r);
   if (!silent) emit('project');

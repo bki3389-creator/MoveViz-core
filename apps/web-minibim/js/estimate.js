@@ -26,13 +26,16 @@ export function buildEstimate() {
     // 바닥
     push('바닥', canonId(r.floorFinish), m.area);
     // 벽: 기본 마감 = 순면적 − 오버라이드 벽 면적, 오버라이드는 개별
-    let overrideA = 0;
+    let overrideA = 0, innerBoth = 0;
+    for (const w of wallsAll) {   // 가벽은 양면 도배 — 기본 벽마감 수량에 합산
+      if (w.inner && !(r.wallOverrides || {})[w.key]) innerBoth += w.netArea * 2;
+    }
     for (const [wk, fid] of Object.entries(r.wallOverrides || {})) {
       const w = wallsAll.find(x => x.key === wk); if (!w) continue;
       if (!w.inner) overrideA += w.netArea;      // 내부벽은 기본 벽마감(둘레 기준)에 안 들어 있음
-      push('벽(개별)', fid, w.netArea, '벽 ' + wk);
+      push('벽(개별)', fid, w.netArea * (w.inner ? 2 : 1), '벽 ' + wk + (w.inner ? ' 양면' : ''));
     }
-    push('벽', r.wallFinish, Math.max(0, m.wallNet - overrideA));
+    push('벽', r.wallFinish, Math.max(0, m.wallNet - overrideA) + innerBoth);
     // 천장
     push('천장', r.ceilFinish, m.area);
     const ct = CEIL_TYPES.find(c => c.id === r.ceilingType);
@@ -149,8 +152,10 @@ export function renderEstimate(elSummary, elTable) {
       const v = Number(String(inp.value).replace(/[^\d]/g, ''));
       if (isNaN(v)) return;
       const id = inp.dataset.id, kind = inp.dataset.kind;
-      const cur = ratesOf(id, state.project.rates);
-      state.project.rates[id] = { m: kind === 'm' ? v : cur.m, l: kind === 'l' ? v : cur.l };
+      // 반대편 값은 화면의 짝 입력칸에서 읽는다 — 'furn:' 등 카탈로그 밖 id도 안전
+      const other = elTable.querySelector(`.rate-in[data-id="${(window.CSS && CSS.escape) ? CSS.escape(id) : id}"][data-kind="${kind === 'm' ? 'l' : 'm'}"]`);
+      const ov2 = Number(String(other?.value ?? '').replace(/[^\d]/g, '')) || 0;
+      state.project.rates[id] = { m: kind === 'm' ? v : ov2, l: kind === 'l' ? v : ov2 };
       emit('rates');
     });
   });

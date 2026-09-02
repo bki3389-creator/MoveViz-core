@@ -286,6 +286,54 @@ export function buildDXFString() {
       text(dx0 + 0.55 * k, dy0 + 0.2 * k, 0.09, '걸레받이 H80 / 바닥 마감층 / 벽 마감', 'A-SECT');
       EXT(dx0 + 1.0 * k, dy0 - 0.3);
     }
+    // 우물천장 단면 상세 (4배 확대, 참조용)
+    {
+      const k = 4, dx = secX + 0.8 + 1.0 * k + 1.0, dy = secBaseY - 1.2;
+      const ySl = dy + 0.5 * k;                                             // 상부 슬래브 하단
+      const yC = dy + 0.3 * k;                                              // 중앙 평천장 마감면
+      const yB = yC - 0.12 * k;                                             // 밴드 하단 (단내림 120)
+      poly([[dx, ySl], [dx + 0.9 * k, ySl],
+            [dx + 0.9 * k, ySl + 0.06 * k], [dx, ySl + 0.06 * k]], 'S-SLAB', true);                       // 상부 슬래브
+      for (const hx2 of [0.5, 0.65, 0.8]) line(dx + hx2 * k, ySl, dx + hx2 * k, yC + 0.03 * k, 'A-SECT'); // 달대/행거
+      poly([[dx, yB], [dx + 0.35 * k, yB], [dx + 0.35 * k, yC], [dx, yC]], 'A-SECT', true);               // 둘레 목틀 단내림 밴드 W350
+      line(dx, yB, dx + 0.35 * k, yB, 'A-SECT');                            // 석고보드 1P (상)
+      line(dx, yB - 0.01 * k, dx + 0.35 * k, yB - 0.01 * k, 'A-SECT');      // 석고보드 1P (하)
+      line(dx, yB - 0.015 * k, dx + 0.35 * k, yB - 0.015 * k, 'A-SECT');    // 마감(도배)선
+      line(dx + 0.35 * k, yB - 0.015 * k, dx + 0.35 * k, yC, 'A-SECT');     // 단내림 수직 연결부
+      line(dx + 0.35 * k, yC, dx + 0.9 * k, yC, 'A-SECT');                  // 중앙 평천장 마감
+      line(dx + 0.35 * k, yC + 0.01 * k, dx + 0.9 * k, yC + 0.01 * k, 'A-SECT');  // 평천장 석고 1P
+      text(dx + 0.45 * k, dy + 0.75 * k, 0.13, '우물천장 상세 (4배)', 'A-ANNO-TEXT');
+      text(dx + 0.55 * k, (yB + yC) / 2, 0.08, '단내림 120', 'A-ANNO-TEXT');
+      text(dx + 0.17 * k, yB - 0.07 * k, 0.08, '밴드 W350', 'A-ANNO-TEXT');
+      text(dx + 0.65 * k, ySl - 0.15 * k, 0.08, '목틀 30×30 @450', 'A-SECT');
+      text(dx + 0.17 * k, yB - 0.15 * k, 0.08, '석고 9.5T+도배', 'A-SECT');
+      EXT(dx + 1.0 * k, dy - 0.1); EXT(dx, dy + 0.85 * k);
+    }
+    // 간접등 커튼박스 상세 (4배 확대, 참조용)
+    {
+      const k = 4, dx = secX + 0.8 + 2.0 * k + 2.0, dy = secBaseY - 1.2;
+      const ySl = dy + 0.5 * k;                                             // 천장 슬래브 하단
+      const yC = dy + 0.42 * k;                                             // 천장 마감면
+      const wallX = dx + 0.6 * k;                                           // 벽 내측면
+      poly([[dx, ySl], [dx + 0.8 * k, ySl],
+            [dx + 0.8 * k, ySl + 0.06 * k], [dx, ySl + 0.06 * k]], 'S-SLAB', true);                       // 천장 슬래브
+      poly([[wallX, dy], [wallX + 0.15 * k, dy], [wallX + 0.15 * k, ySl], [wallX, ySl]], 'S-WALL', true); // 벽체
+      const bx0 = wallX - 0.3 * k, by0 = yC - 0.18 * k;                     // 커튼박스 300×180
+      line(dx, yC, bx0, yC, 'A-SECT');                                      // 천장 마감선 (박스 앞까지)
+      poly([[bx0, by0], [wallX, by0], [wallX, yC], [bx0, yC]], 'A-SECT', true);                           // 커튼박스 (목공)
+      const lx2 = bx0 + 0.07 * k, ly2 = by0 + 0.05 * k;                     // 간접조명 위치
+      arc(lx2, ly2, 0.08, 0, 360, 'E-LITE');
+      line(lx2 - 0.02 * k, ly2 + 0.03 * k, lx2 - 0.06 * k, yC - 0.02 * k, 'E-LITE');   // 빛 화살표(상향)
+      line(lx2 + 0.01 * k, ly2 + 0.04 * k, lx2 - 0.02 * k, yC - 0.01 * k, 'E-LITE');
+      arc(wallX - 0.05 * k, by0 + 0.03 * k, 0.04, 0, 360, 'A-SECT');        // 커튼레일
+      line(wallX - 0.05 * k, by0, wallX - 0.05 * k, by0 - 0.15 * k, 'A-SECT');          // 커튼 드롭
+      text(dx + 0.4 * k, dy + 0.75 * k, 0.13, '간접등 커튼박스 상세 (4배)', 'A-ANNO-TEXT');
+      text(bx0 + 0.15 * k, by0 - 0.08 * k, 0.08, '커튼박스 300×180', 'A-ANNO-TEXT');
+      text(dx + 0.14 * k, ly2, 0.08, 'T5/LED 간접', 'A-SECT');
+      text(bx0 - 0.1 * k, yC - 0.06 * k, 0.08, '몰딩 마감', 'A-SECT');
+      text(wallX - 0.12 * k, by0 - 0.22 * k, 0.08, '커튼레일 공간', 'A-SECT');
+      EXT(dx + 0.9 * k, dy - 0.1); EXT(dx, dy + 0.85 * k);
+    }
   }
 
   if (!isFinite(mnX)) return;

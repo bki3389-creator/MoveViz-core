@@ -21,7 +21,7 @@ export function init3D(el) {
   el.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xeef1f5);
+  scene.background = natureEquirect();   // 창밖 = 자연(하늘·수목·잔디)
   scene.fog = new THREE.Fog(0xeef1f5, 40, 110);
 
   camera = new THREE.PerspectiveCamera(52, 1, 0.05, 300);
@@ -865,7 +865,7 @@ function pickAt(e) {
 }
 
 function onHover(e) {
-  if (state.mode !== 'light') { hoverMarker.visible = false; return; }
+  if (walk || state.mode !== 'light') { hoverMarker.visible = false; return; }
   const hits = pickAt(e).filter(h => h.object.userData.kind === 'floor' || h.object.userData.kind === 'ceiling');
   if (hits.length) {
     hoverMarker.visible = true;
@@ -876,6 +876,7 @@ function onHover(e) {
 }
 
 function onClick(e) {
+  if (walk) return;   // 걷기(포인터록) 중 클릭은 시점 조작 — 설치/선택 금지
   if (_down && Math.hypot(e.clientX - _down[0], e.clientY - _down[1]) > 5) { _down = null; return; } // 드래그=궤도
   _down = null;
   const hits = pickAt(e);
@@ -962,6 +963,38 @@ export function clearHighlight() {
     }
   }
   highlight = null;
+}
+
+/// 자연 배경 파노라마(등장방형): 하늘 그라데이션 + 원경 수목 라인 + 잔디 지면
+let _natureTex = null;
+export function natureEquirect() {
+  if (_natureTex) return _natureTex;
+  const W = 4096, H2 = 2048, HOR = Math.round(H2 * 0.565);
+  const c = document.createElement('canvas'); c.width = W; c.height = H2;
+  const g = c.getContext('2d');
+  const sky = g.createLinearGradient(0, 0, 0, HOR);
+  sky.addColorStop(0, '#5f9fd8'); sky.addColorStop(0.6, '#a8cbec'); sky.addColorStop(0.92, '#dcebf7'); sky.addColorStop(1, '#eaf2f3');
+  g.fillStyle = sky; g.fillRect(0, 0, W, HOR);
+  // 원경 수목: 두 겹 매끄러운 실루엣 (뒤 옅게 → 앞 진하게), 소프트 블러
+  for (const [amp, base, col, blur] of [[26, 54, '#a6bb99', 8], [34, 30, '#7d9a72', 4]]) {
+    g.save();
+    if (g.filter !== undefined) g.filter = 'blur(' + blur + 'px)';
+    g.fillStyle = col;
+    g.beginPath(); g.moveTo(0, HOR);
+    for (let x = 0; x <= W; x += 16) {
+      const y = HOR - base - amp * (0.55 + 0.45 * Math.sin(x * 0.004) + 0.3 * Math.sin(x * 0.0013 + 2) + 0.18 * Math.sin(x * 0.011));
+      g.lineTo(x, y);
+    }
+    g.lineTo(W, HOR); g.closePath(); g.fill();
+    g.restore();
+  }
+  const gr = g.createLinearGradient(0, HOR, 0, H2);
+  gr.addColorStop(0, '#a3bd92'); gr.addColorStop(0.35, '#8dab7c'); gr.addColorStop(1, '#647f58');
+  g.fillStyle = gr; g.fillRect(0, HOR, W, H2 - HOR);
+  _natureTex = new THREE.CanvasTexture(c);
+  _natureTex.mapping = THREE.EquirectangularReflectionMapping;
+  _natureTex.colorSpace = THREE.SRGBColorSpace;
+  return _natureTex;
 }
 
 export function getSceneRefs() { return { scene, camera, renderer, root }; }
