@@ -39,7 +39,7 @@ export function buildEstimate() {
     // 천장
     push('천장', r.ceilFinish, m.area);
     const ct = CEIL_TYPES.find(c => c.id === r.ceilingType);
-    if (ct && ct.rate !== 0) push('천장 유형', ct.id, ct.basis === 'perimeter' ? m.per : m.area);
+    if (ct && (ct.mat || ct.lab)) push('천장 유형', ct.id, ct.basis === 'perimeter' ? m.per : m.area);   // rate 필드는 v3에서 폐기 — 0원 유령 행 방지
     // 벽체 유형(신설/철거)
     for (const [wk, tid] of Object.entries(r.wallTypes || {})) {
       const w = wallsAll.find(x => x.key === wk); if (!w) continue;
@@ -77,7 +77,8 @@ export function buildEstimate() {
                   note: f.replaced ? '기존 ' + f.replaced.name + ' 반출' : '가구 추가' });
     }
     // 가구 반출·폐기 — 폐기/교체 지정 시 자동 (수동 입력 있으면 중복 방지)
-    const dispTon = Math.round(furnDisposalKg(r.plan.furniture) / 100) / 10;
+    const dispKg = furnDisposalKg(r.plan.furniture);
+    const dispTon = dispKg > 0 ? Math.max(0.1, Math.round(dispKg / 100) / 10) : 0;   // 50kg 미만도 0.1t 최소 청구 — 반올림 소실 방지
     const manualOut = (r.extras || []).some(ex => String(ex.id).startsWith('w_furnout'));
     if (dispTon > 0 && !manualOut) push('철거·반출', 'w_furnout#1', dispTon, '자동(폐기·교체 가구)');
   }

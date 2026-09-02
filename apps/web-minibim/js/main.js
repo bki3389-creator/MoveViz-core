@@ -183,15 +183,13 @@ async function runRenderShot(sampleTarget = 220, w = 1120, h = 700, mode = 'auto
   $('shotSave').style.display = 'none';
   $('shotProg').textContent = '준비 중…';
   $('shotStop').onclick = () => stopRender();
-  $('shotClose').onclick = async () => {
-    stopRender(); modal.hidden = true;
-    const { forceReset } = await import('./render.js');
-    setTimeout(() => { if (isRendering()) forceReset(); }, 1500);   // 닫기 = 확실한 종료
-  };
-  $('shotView').onclick = () => { stopRender(); setTimeout(() => runRenderShot(sampleTarget, w, h,
-    mode === 'overview' || (mode === 'auto' && interiorPose()) ? 'overview2' : 'auto'), 300); };
-  // overview2 → 실내↔전체 토글용: 'overview'로 정규화
-  if (mode === 'overview2') mode = 'overview';
+  // 닫기 = stopRender(세대 토큰 증가)로 즉시 종료 — 지연 forceReset은 그 사이 새로 시작한
+  // 렌더를 죽이던 결함(2차 감사 확정)이라 제거. 걸린 컴파일은 재클릭 경로(위)가 강제 리셋.
+  $('shotClose').onclick = () => { stopRender(); modal.hidden = true; };
+  // 실내↔전체 토글: 이 호출의 mode를 지역 상수로 고정해 클로저-재할당 버그 차단(2차 감사 확정)
+  const isOv = mode === 'overview';
+  $('shotView').onclick = () => { stopRender(); setTimeout(() =>
+    runRenderShot(sampleTarget, w, h, isOv ? 'auto' : 'overview'), 300); };
   const { root, camera } = getSceneRefs();
   // 시점 우선순위: 걷다 멈춘 지점 > 자동 실내 코너 > 전체
   const wp = getWalkPose();
@@ -322,8 +320,10 @@ function aiAdd(role, text, changes) {
   }
   log.scrollTop = log.scrollHeight;
 }
+let aiBusy = false;   // Enter가 비활성 버튼을 우회해 병행 요청·이력 오염되던 결함 가드
 async function aiGo() {
-  const t = $('aiInput').value.trim(); if (!t) return;
+  const t = $('aiInput').value.trim(); if (!t || aiBusy) return;
+  aiBusy = true;
   aiAdd('me', t + (aiImg ? ' 📍' : ''));
   $('aiInput').value = ''; $('aiSend').disabled = true; $('aiSend').textContent = '…';
   try {
@@ -333,6 +333,7 @@ async function aiGo() {
   } catch (err) {
     aiAdd('ai', '⚠ ' + (err && err.message || err));
   }
+  aiBusy = false;
   $('aiSend').disabled = false; $('aiSend').textContent = '보내기';
 }
 $('aiCapture').onclick = () => {

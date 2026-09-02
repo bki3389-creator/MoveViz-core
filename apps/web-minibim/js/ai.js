@@ -6,7 +6,7 @@ import { state, emit, room, addLight, addExtra, addFurniture, lightGridOf, metri
          setFurnStatus } from './state.js';
 import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, LIGHTS, FURN_ITEMS,
          WORK_ITEMS, item } from './catalog.js';
-import { getSceneRefs } from './scene3d.js';
+import { getSceneRefs, getWalkPose } from './scene3d.js';
 
 const MODEL = 'claude-opus-5';
 let chat = [];            // Claude 대화 이력 (content 블록 그대로 — thinking 블록 포함 재전송)
@@ -15,9 +15,25 @@ export function apiKey() { try { return localStorage.getItem('planshot_api_key')
 export function setApiKey(k) { try { localStorage.setItem('planshot_api_key', (k || '').trim()); } catch {} }
 export function resetChat() { chat = []; }
 
-/// 현재 3D 시점(걷기로 멈춘 그 화면) 캡처 — 한 프레임 다시 그리고 즉시 추출
+/// 현재 3D 시점 캡처 — 걷기로 멈춘 시점(lastWalkPose)이 있으면 그 pos/시선/화각(70°)으로
+/// 임시 전환해 찍고 복원한다(exitWalk가 FOV·피치를 되돌려 놓는 문제의 우회 — 2차 감사 확정).
 export function captureViewpoint() {
   const { scene, camera, renderer } = getSceneRefs();
+  const wp = getWalkPose();
+  if (wp) {
+    const keep = { pos: camera.position.clone(), quat: camera.quaternion.clone(), fov: camera.fov };
+    camera.position.set(...wp.pos);
+    camera.fov = wp.fov || 70;
+    camera.updateProjectionMatrix();
+    camera.lookAt(...wp.look);
+    renderer.render(scene, camera);
+    const url = renderer.domElement.toDataURL('image/jpeg', 0.85);
+    camera.position.copy(keep.pos);
+    camera.quaternion.copy(keep.quat);
+    camera.fov = keep.fov;
+    camera.updateProjectionMatrix();
+    return url;
+  }
   renderer.render(scene, camera);
   return renderer.domElement.toDataURL('image/jpeg', 0.85);
 }
@@ -95,10 +111,12 @@ export async function askDesigner(userText, imageDataUrl) {
     throw new Error(`API ${res.status}: ${t.slice(0, 240)}`);
   }
   const data = await res.json();
-  chat.push({ role: 'assistant', content: data.content });
   if (data.stop_reason === 'refusal') {
+    // 거절 턴은 이력에서 통째로 제거 — 빈 content assistant가 남으면 이후 요청 전부 400 (2차 감사 확정)
+    chat.pop();
     return { text: '요청을 처리할 수 없었습니다(안전 정책). 다르게 표현해 주세요.', changes: [] };
   }
+  chat.push({ role: 'assistant', content: data.content });
   const full = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
   const m = full.match(/```json\s*([\s\S]*?)```/);
   let changes = [];
@@ -121,7 +139,9 @@ export function describeChange(ch) {
 }
 
 export function applyChange(ch) {
-  const r = (state.project?.rooms || []).find(x => x.name === ch.room) || room(state.selRoom);
+  // 실명이 지정됐는데 없으면 '불가' — 조용히 선택된 방에 적용하면 무증상 오적용 (2차 감사 확정)
+  const rooms = state.project?.rooms || [];
+  const r = ch.room ? rooms.find(x => x.name === ch.room) : room(state.selRoom);
   if (!r) return false;
   switch (ch.action) {
     case 'set_finish': {
@@ -160,8 +180,12 @@ export function applyChange(ch) {
       const f = FURN_ITEMS.find(x => x.name === ch.name) ||
                 FURN_ITEMS.find(x => ch.name && x.name.includes(String(ch.name).slice(0, 2)));
       if (!f) return false;
-      const bbm = metricsOf(r);
-      addFurniture(r, f.category, f.name, f.w, f.d, bbm.w / 2, bbm.d / 2);
+      // 방 boundary 무게중심에 배치 — metricsOf().w/2 는 원점이 0이 아닌 스캔 평면에서
+      // 방 밖 좌표가 된다 (2차 감사 확정, main.js '+ 방 가운데' 버튼과 동일 방식)
+      const bd2 = r.plan.boundary || [];
+      const cx = bd2.length ? bd2.reduce((s2, p2) => s2 + p2[0], 0) / bd2.length : metricsOf(r).w / 2;
+      const cz = bd2.length ? bd2.reduce((s2, p2) => s2 + p2[1], 0) / bd2.length : metricsOf(r).d / 2;
+      addFurniture(r, f.category, f.name, f.w, f.d, cx, cz);
       break;
     }
     default: return false;

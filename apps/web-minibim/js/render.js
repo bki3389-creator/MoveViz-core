@@ -6,32 +6,46 @@ import * as THREE from '../vendor/three.module.js';
 import { WebGLPathTracer } from 'three-gpu-pathtracer';
 import { natureEquirect } from './scene3d.js';
 
-let running = false, stopFlag = false;
+// 인스턴스 토큰(gen): stop/forceReset/새 시작마다 증가 — 진행 중이던 이전 루프는
+// 자기 토큰과 어긋나는 순간 스스로 종료한다. (전역 stopFlag 공유로 좀비 루프가
+// 새 렌더의 stopFlag=false를 보고 부활해 같은 캔버스에 이중 렌더하던 결함 수정)
+let running = false, gen = 0;
 
 /// 자연 배경을 패스트레이서가 읽는 DataTexture(Float RGBA)로 변환 — CanvasTexture는
 /// EquirectHdrInfoUniform이 image.data를 요구해 크래시한다(자연 배경 도입 후 렌더 실패 원인).
-let natureDataTex = null;
+// 배경(눈에 보이는 자연)은 원색 유지, 환경광(빛으로 쓰이는 쪽)은 탈채도 —
+// 잔디 초록이 지붕·벽에 물드는 것(녹색 지붕) 방지.
+let natureTexes = null;
 function natureEnvData() {
-  if (natureDataTex) return natureDataTex;
+  if (natureTexes) return natureTexes;
   const cnv = natureEquirect(1024).image;
   const w = cnv.width, h = cnv.height;
   const src = cnv.getContext('2d').getImageData(0, 0, w, h).data;
-  const data = new Float32Array(w * h * 4);
-  for (let i = 0; i < w * h; i++) {
-    for (let k = 0; k < 3; k++) data[i * 4 + k] = Math.pow(src[i * 4 + k] / 255, 2.2);  // sRGB→linear
-    data[i * 4 + 3] = 1;
-  }
-  const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.FloatType);
-  t.mapping = THREE.EquirectangularReflectionMapping;
-  t.needsUpdate = true;
-  natureDataTex = t;
-  return t;
+  const mk = desat => {
+    const data = new Float32Array(w * h * 4);
+    for (let i = 0; i < w * h; i++) {
+      let r = Math.pow(src[i * 4] / 255, 2.2);        // sRGB→linear
+      let g = Math.pow(src[i * 4 + 1] / 255, 2.2);
+      let b = Math.pow(src[i * 4 + 2] / 255, 2.2);
+      if (desat) {
+        const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        r += (l - r) * desat; g += (l - g) * desat; b += (l - b) * desat;
+      }
+      data[i * 4] = r; data[i * 4 + 1] = g; data[i * 4 + 2] = b; data[i * 4 + 3] = 1;
+    }
+    const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.FloatType);
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    t.needsUpdate = true;
+    return t;
+  };
+  natureTexes = { bg: mk(0), env: mk(0.6) };
+  return natureTexes;
 }
 
 export function isRendering() { return running; }
-export function stopRender() { stopFlag = true; }
+export function stopRender() { gen++; }
 /// 강제 종료 — 느린 샘플/걸린 컴파일로 안 멈출 때 상태를 리셋(다음 렌더 즉시 가능)
-export function forceReset() { stopFlag = true; running = false; }
+export function forceReset() { gen++; running = false; }
 
 /// scene/camera 를 받아 modalCanvas 에 프로그레시브 패스트레이싱.
 /// onProgress(samples, target) 콜백. 완료/중지 시 resolve(dataURL).
@@ -40,7 +54,9 @@ export async function renderShot(root, camera, canvas, {
   camPose = null,          // {pos:[x,y,z], look:[x,y,z], fov} — 실내 시점 프리셋
 } = {}) {
   if (running) return null;
-  running = true; stopFlag = false;
+  running = true;
+  const myGen = ++gen;
+  let loopErr = false;
 
   // three r160 ↔ pathtracer 신버전 호환 가드: undefined Euler 를 안전 처리(+1회 스택 로그)
   if (!window.__mrePatched) {
@@ -64,26 +80,48 @@ export async function renderShot(root, camera, canvas, {
   renderer.toneMappingExposure = 1.1;
 
   // 방 지오메트리만 복제한 전용 씬 — GridHelper 등 헬퍼(LineSegments)는 패스트레이서가 못 다룸
-  const envTex = natureEnvData();   // Float DataTexture — 패스트레이서 호환
+  const texes = natureEnvData();   // Float DataTexture — 패스트레이서 호환
   const scene = new THREE.Scene();
-  scene.background = envTex;
-  scene.environment = envTex;
+  scene.background = texes.bg;     // 창밖 = 원색 자연
+  scene.environment = texes.env;   // 환경광 = 탈채도(녹색 캐스트 방지)
   // three r160 호환 심: r162+에서 추가된 회전 속성을 pathtracer가 읽는다
   scene.environmentRotation = new THREE.Euler();
   scene.backgroundRotation = new THREE.Euler();
   scene.backgroundIntensity = 0.7;
   scene.environmentIntensity = 0.55;
   const model = root.clone(true);
-  // 렌더 전용 보정: 천장 닫기 + 조명 픽스처 발광 강화(빛나는 광원으로) + 재질 미세 러프니스
+  // 렌더 전용 보정: 천장은 무조건 켜고 불투명하게(반투명 천장은 PT에서 빛이 새 우유빛),
+  // 조명 픽스처 발광 강화(빛나는 광원으로). clone(true)는 재질 공유 — 수정 전 반드시 clone.
   model.traverse(obj => {
-    if (obj.userData?.isCeil) obj.visible = true;
+    if (obj.userData?.isCeil) {
+      obj.visible = true;
+      if (obj.material?.transparent) {
+        obj.material = obj.material.clone();
+        obj.material.transparent = false;
+        obj.material.opacity = 1;
+      }
+    }
     const m2 = obj.material;
     if (m2?.emissive && (m2.emissiveIntensity ?? 0) > 0.5 && m2.emissive.getHex() !== 0) {
-      obj.material = m2.clone();       // clone(true)는 재질을 공유 — 라이브 씬 오염 금지
+      obj.material = m2.clone();
       obj.material.emissiveIntensity = 20;   // 패스트레이서에서 실제 광원 역할
     }
   });
   scene.add(model);
+  // 조명은 라이브 뷰의 '조명 효과' 모드와 무관하게 렌더에선 전부 켠다 —
+  // 픽스처 메시마다 실광원(PointLight)을 강제 생성(발광 디스크만으론 어둡고 노이즈 큼)
+  model.updateMatrixWorld(true);
+  const fixtures = [];
+  model.traverse(o => {
+    if (o.userData?.kind === 'light' && o.material?.emissive) fixtures.push(o);
+  });
+  for (const f of fixtures.slice(0, 24)) {
+    const p = new THREE.Vector3();
+    f.getWorldPosition(p);
+    const pl = new THREE.PointLight(0xfff1dc, 5.5, 0, 2);
+    pl.position.set(p.x, p.y - 0.09, p.z);
+    scene.add(pl);
+  }
   // 태양광 — 창으로 빛이 들어와 명암을 만든다
   const sun = new THREE.DirectionalLight(0xfff0dc, 5.5);
   sun.position.set(6, 9, -7);
@@ -91,7 +129,7 @@ export async function renderShot(root, camera, canvas, {
   scene.add(sun.target);
   // 잔디 지면 — 건물 주변 자연 바닥
   const ground = new THREE.Mesh(new THREE.CircleGeometry(60, 48),
-    new THREE.MeshStandardMaterial({ color: 0x8fa87e, roughness: 1 }));
+    new THREE.MeshStandardMaterial({ color: 0x99a38d, roughness: 1 }));   // 저채도 — 녹색 반사 완화
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.03;
   scene.add(ground);
@@ -117,12 +155,13 @@ export async function renderShot(root, camera, canvas, {
 
     await new Promise(resolve => {
       const loop = () => {
-        if (stopFlag || pt.samples >= samples) { resolve(); return; }
+        if (myGen !== gen || pt.samples >= samples) { resolve(); return; }
         try {
           pt.renderSample();
         } catch (err2) {
           console.error('렌더 루프 오류:', err2);
           window.__shotErr = String(err2?.message || err2);
+          loopErr = true;
           resolve(); return;
         }
         onProgress(Math.floor(pt.samples), samples);
@@ -130,6 +169,9 @@ export async function renderShot(root, camera, canvas, {
       };
       loop();
     });
+    // 첫 renderSample 실패(가장 흔한 실패 지점)를 '완료'로 위장하지 않는다 —
+    // 캔버스엔 래스터 미리보기가 남아 있어 url이 항상 truthy이기 때문 (2차 감사 확정)
+    if (loopErr && pt.samples < 1) return null;
     const url = canvas.toDataURL('image/png');
     return url;
   } catch (err) {
@@ -139,6 +181,6 @@ export async function renderShot(root, camera, canvas, {
   } finally {
     pt.dispose?.();
     renderer.dispose();
-    running = false;
+    if (myGen === gen) running = false;   // 대체된 구 인스턴스가 새 렌더의 running을 끄지 않게
   }
 }

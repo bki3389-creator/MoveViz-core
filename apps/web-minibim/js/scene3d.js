@@ -155,7 +155,11 @@ function onWalkMouse(e) {
 }
 function onWalkKey(e) {
   if (!walk) return;
-  if (e.code === 'Escape' || e.code === 'F4') { e.preventDefault(); exitWalk(); return; }
+  if (e.code === 'Escape' || e.code === 'F4') {
+    // stopPropagation 필수 — 같은 keydown이 main.js 전역 F4 분기에 버블되면
+    // exitWalk 직후 재진입(종료 불가 + 방 중심 순간이동)된다 (2차 감사 확정 결함)
+    e.preventDefault(); e.stopPropagation(); exitWalk(); return;
+  }
   walk.keys[e.code] = true;
   e.stopPropagation();   // 걷는 동안 전역 단축키(W=가벽 등) 차단
 }

@@ -319,7 +319,7 @@ export function arrangeRooms() {
 export function loadJSONText(text, filename) {
   let obj;
   try { obj = JSON.parse(text); } catch { throw new Error('JSON 파싱 실패: ' + filename); }
-  if (obj && obj.version && Array.isArray(obj.rooms) && obj.rooms[0]?.plan) {
+  if (obj && obj.version && Array.isArray(obj.rooms) && !obj.boundary && !obj.xw && !obj.zw) {
     // 미니BIM 프로젝트 파일
     obj.rooms.forEach(r => {
       normalizePlan(r.plan);
@@ -334,7 +334,8 @@ export function loadJSONText(text, filename) {
     emit('project');
     return 'project';
   }
-  if (obj && (obj.boundary || obj.xw || obj.zw || obj.rooms)) {
+  if (obj && (obj.boundary || obj.xw || obj.zw
+      || (Array.isArray(obj.rooms) && obj.rooms.length && !obj.version))) {
     if (!state.project) state.project = newProject();
     const name = (filename || '').replace(/\.json$/i, '').replace(/^plan[_-]?/i, '') || undefined;
     addRoom(obj, obj.rooms?.[0]?.name || name);
@@ -396,6 +397,8 @@ const _hist = [];
 export function pushHistory(r) {
   _hist.push({ roomId: r.id, plan: JSON.parse(JSON.stringify(r.plan)),
                lights: JSON.parse(JSON.stringify(r.lights || [])),
+               ov: JSON.parse(JSON.stringify(r.wallOverrides || {})),   // splitWall b키 리매핑 원복용
+               wt: JSON.parse(JSON.stringify(r.wallTypes || {})),
                pos: r.pos ? { ...r.pos } : null });
   if (_hist.length > 30) _hist.shift();
 }
@@ -403,6 +406,8 @@ export function undo() {
   const h = _hist.pop(); if (!h) return false;
   const r = room(h.roomId); if (!r) return false;
   r.plan = h.plan; r.lights = h.lights;
+  if (h.ov) r.wallOverrides = h.ov;
+  if (h.wt) r.wallTypes = h.wt;
   if (h.pos) r.pos = { ...h.pos };
   state.sel = null;
   emit('project');
@@ -473,10 +478,17 @@ export function removeInnerWall(r, key) {
   const arr = m[1] === 'x' ? r.plan.xw : r.plan.zw;
   const w = arr[+m[2]]; if (!w) return false;
   pushHistory(r);
-  // 이 벽에 붙은 개구부도 함께 제거 (댕글링 방지 — 아키톤 리뷰에서 배운 함정)
+  // 이 세그에 붙은 개구부만 함께 제거 (댕글링 방지) — 같은 선상 다른 세그/가벽의
+  // 개구부는 span 검사로 보존(2차 감사 확정 결함: pos-only 필터가 남의 문까지 지움)
   const pos = w.pos, dir = m[1];
-  r.plan.openings = r.plan.openings.filter(op =>
-    !(op.wall_dir === dir && Math.abs((op.wall_pos ?? 1e9) - pos) < 0.18));
+  const seg = w.segs[+m[3]]; if (!seg) return false;
+  const sLo = Math.min(seg[0], seg[1]), sHi = Math.max(seg[0], seg[1]);
+  r.plan.openings = r.plan.openings.filter(op => {
+    if (op.wall_dir !== dir || Math.abs((op.wall_pos ?? 1e9) - pos) > 0.18) return true;
+    if (!op.span) return false;
+    const s0 = Math.min(op.span[0], op.span[1]), s1 = Math.max(op.span[0], op.span[1]);
+    return s1 < sLo - 0.05 || s0 > sHi + 0.05;   // 이 세그 구간 밖이면 보존
+  });
   w.segs.splice(+m[3], 1);
   if (!w.segs.length) arr.splice(+m[2], 1);
   if (state.sel?.kind === 'wall') state.sel = null;
@@ -491,7 +503,7 @@ function syncEdgeOpenings(plan, dir, oldPos, newPos, lo, hi) {
   if (Math.abs(oldPos - newPos) < 1e-9) return;
   for (const op of plan.openings || []) {
     if (op.wall_dir !== dir || op.wall_pos == null || !op.span) continue;
-    if (Math.abs(op.wall_pos - oldPos) > 0.09) continue;
+    if (Math.abs(op.wall_pos - oldPos) > 0.18) continue;   // 부착 허용치(wallsOf 0.18)와 통일
     const s0 = Math.min(op.span[0], op.span[1]), s1 = Math.max(op.span[0], op.span[1]);
     if (s1 < lo - 0.05 || s0 > hi + 0.05) continue;
     op.wall_pos = newPos;
@@ -568,7 +580,7 @@ export function splitWall(r, wallKey, t) {
   const edgePos = horiz ? a[1] : a[0];
   const blocked = (r.plan.openings || [])
     .filter(op => op.wall_dir === (horiz ? 'z' : 'x') && op.span
-      && Math.abs((op.wall_pos ?? 1e9) - edgePos) < 0.09)
+      && Math.abs((op.wall_pos ?? 1e9) - edgePos) < 0.18)
     .map(op => [Math.min(op.span[0], op.span[1]) - 0.1, Math.max(op.span[0], op.span[1]) + 0.1]);
   const clash = (x0, x1) => blocked.some(([b0, b1]) => x1 > b0 && x0 < b1);
   if (clash(c0, c1)) {
@@ -627,15 +639,24 @@ export function moveCorner(r, vi, nx2, nz2, silent) {
     }
     return 'diag';
   };
+  // 0길이 스텁이 연달아 겹친 경우(3점 이상 중첩)까지 체인으로 동행 — 'zero' 반환을
+  // 무시하면 중첩점 하나만 남아 경계가 대각으로 찢긴다(2차 감사 확정 결함)
+  const followChain = (startIdx, step, stopAt) => {
+    let k = startIdx;
+    for (let n = 0; n < N; n++, k += step) {
+      const u = bd[((k % N) + N) % N];
+      if (u === c || u === stopAt) return;
+      if (orthoFollow(u) !== 'zero') return;
+      u[0] = ox; u[1] = oz;
+    }
+  };
   if (orthoFollow(p) === 'zero') {
     p[0] = ox; p[1] = oz;
-    const pp = bd[(vi - 2 + N) % N];
-    if (pp !== c && pp !== q) orthoFollow(pp);
+    followChain(vi - 2, -1, q);
   }
   if (orthoFollow(q) === 'zero') {
     q[0] = ox; q[1] = oz;
-    const qq = bd[(vi + 2) % N];
-    if (qq !== c && qq !== p) orthoFollow(qq);
+    followChain(vi + 2, 1, p);
   }
   c[0] = ox; c[1] = oz;
   syncRoomPolys(r);

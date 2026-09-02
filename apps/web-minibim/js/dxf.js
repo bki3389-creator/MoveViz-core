@@ -1,6 +1,6 @@
 // dxf.js — 현재 프로젝트 → DXF R12 다운로드. 2D 화면과 동일한 도면 문법 + **삶것 실무 레이어 체계**
 // (Y:2404 한남다원 티하우스 발행본에서 복원: 벽=A-CON(구조)+A-FIN(마감) — A-WALL 안 씀,
-//  치수 1-Dim_axis(축)/1-Dim_axis-in(내부), 문자 2-Tx_SIZE <출력mm>, 실명 1-SYM_room,
+//  치수 1-Dim_axis(축)/1-Dim_axis-in(내부), 문자 2-Tx_<mm> (R12 심볼명 규칙: 공백·마침표 금지), 실명 1-SYM_room,
 //  가구 A-FUR, 문 A-DOOR-plan, 창 A-WIN-sec, 조명 A-ETC, 서체 DOTUM=HDOTUM.TTF). 단위 mm.
 
 import { state, layoutOffsets, wallsOf, wallCuts, metricsOf, bboxOf, doorGeom } from './state.js';
@@ -21,7 +21,12 @@ export function buildDXFString() {
     return c > 126 ? '\\U+' + c.toString(16).toUpperCase().padStart(4, '0') : ch;
   }).join('');
 
+  const _lineSeen = new Set();   // 완전 동일 LINE(레이어·좌표) 중복 제거 — 치수 체인 공유 스톱 등
   const line = (x1, y1, x2, y2, L) => {
+    const p1 = n(x1) + ',' + n(y1), p2 = n(x2) + ',' + n(y2);
+    const sig = L + '|' + (p1 < p2 ? p1 + '|' + p2 : p2 + '|' + p1);   // 방향 무관 동일선 판정
+    if (_lineSeen.has(sig)) return;
+    _lineSeen.add(sig);
     e(0, 'LINE'); e(8, L);
     e(10, n(x1)); e(20, n(y1)); e(30, '0'); e(11, n(x2)); e(21, n(y2)); e(31, '0');
     EXT(x1, y1); EXT(x2, y2);
@@ -93,7 +98,7 @@ export function buildDXFString() {
           cursor = Math.max(cursor, c.hi);
         }
         if (cursor < w.hi - 0.005) pieces.push([cursor, w.hi]);
-        if (!cutsAll.length) pieces.push([w.lo, w.hi]); }
+        if (!pieces.length) pieces.push([w.lo, w.hi]); }   // 위 루프가 비었을 때만 — 중복 드로잉 방지
       for (const [a0, b0] of pieces) {
         const a = Math.abs(a0 - w.lo) < 1e-9 ? a0 - halfM : a0;
         const b = Math.abs(b0 - w.hi) < 1e-9 ? b0 + halfM : b0;
@@ -135,7 +140,7 @@ export function buildDXFString() {
             const lx = hx + nx * sgnP * o.w, lz = hz + nz * sgnP * o.w;
             line(X(hx), Y(hz), X(lx), Y(lz), dl);                        // 문짝
             const aStart = Math.atan2(Y(lz) - Y(hz), X(lx) - X(hx)) * 180 / Math.PI;
-            const aEnd = Math.atan2(Y(hz + az * 0) - Y(hz), X(hx + ax * o.w) - X(hx)) * 180 / Math.PI;
+            const aEnd = Math.atan2(Y(hz + az * o.w) - Y(hz), X(hx + ax * o.w) - X(hx)) * 180 / Math.PI;   // az*0 오타 — 세로벽(dir 'x') 호가 0°/0°로 붕괴하던 결함
             const [s0, s1] = ((aEnd - aStart + 360) % 360) <= 180 ? [aStart, aEnd] : [aEnd, aStart];
             arc(X(hx), Y(hz), o.w, s0, s1, dl);
           }
@@ -146,9 +151,9 @@ export function buildDXFString() {
     // ── 실명 + 면적/평/CH + 재료 (한글 \U+ 이스케이프)
     const cX = X((bb.minX + bb.maxX) / 2), cY = Y((bb.minZ + bb.maxZ) / 2);
     text(cX, cY + 0.22, 0.16, r.name, '1-SYM_room');
-    text(cX, cY - 0.02, 0.10, `${m.area.toFixed(2)}m2 (${m.pyeong.toFixed(1)}평) CH ${Math.round(m.H * 1000)}`, '2-Tx_SIZE 1.5');
+    text(cX, cY - 0.02, 0.10, `${m.area.toFixed(2)}m2 (${m.pyeong.toFixed(1)}평) CH ${Math.round(m.H * 1000)}`, '2-Tx_1_5');
     text(cX, cY - 0.22, 0.09,
-         `${item(r.floorFinish)?.name ?? ''}·${item(r.wallFinish)?.name ?? ''}`, '2-Tx_SIZE 1.5');
+         `${item(r.floorFinish)?.name ?? ''}·${item(r.wallFinish)?.name ?? ''}`, '2-Tx_1_5');
 
     // ── 가구 + 라벨
     for (const f of r.plan.furniture || []) {
@@ -266,7 +271,7 @@ export function buildDXFString() {
       line(ox - EXT_T - 0.55, oy, ox - EXT_T - 0.35, oy, '1-Dim_axis-in');
       line(ox - EXT_T - 0.55, oy + H, ox - EXT_T - 0.35, oy + H, '1-Dim_axis-in');
       text(ox - EXT_T - 0.6, oy + H / 2, 0.11, `CH ${Math.round(H * 1000)}`, '1-Dim_axis-in');
-      text(ox + W / 2, oy + H + 0.55, 0.14, `${r.name} 단면`, '2-Tx_SIZE 2.5');
+      text(ox + W / 2, oy + H + 0.55, 0.14, `${r.name} 단면`, '2-Tx_2_5');
       text(ox + W / 2, oy + 0.25, 0.09,
            `바닥 ${item(r.floorFinish)?.name ?? ''} / 벽 ${item(r.wallFinish)?.name ?? ''} / 천장 ${item(r.ceilFinish)?.name ?? ''}`,
            'A-FIN');
@@ -283,7 +288,7 @@ export function buildDXFString() {
       line(dx0 + 0.15 * k + 0.01 * k, dy0 + 0.052 * k, dx0 + 0.15 * k + 0.01 * k, dy0 + 0.6 * k, 'A-FIN');                  // 벽 마감
       poly([[dx0 + 0.15 * k, dy0 + 0.052 * k], [dx0 + 0.18 * k, dy0 + 0.052 * k],
             [dx0 + 0.18 * k, dy0 + 0.132 * k], [dx0 + 0.15 * k, dy0 + 0.132 * k]], 'A-FIN', true);                          // 걸레받이 H80
-      text(dx0 + 0.45 * k, dy0 + 0.75 * k, 0.13, '벽-바닥 접합 상세 (4배 확대)', '2-Tx_SIZE 2.5');
+      text(dx0 + 0.45 * k, dy0 + 0.75 * k, 0.13, '벽-바닥 접합 상세 (4배 확대)', '2-Tx_2_5');
       text(dx0 + 0.55 * k, dy0 + 0.2 * k, 0.09, '걸레받이 H80 / 바닥 마감층 / 벽 마감', 'A-FIN');
       EXT(dx0 + 1.0 * k, dy0 - 0.3);
     }
@@ -303,9 +308,9 @@ export function buildDXFString() {
       line(dx + 0.35 * k, yB - 0.015 * k, dx + 0.35 * k, yC, 'A-FIN');     // 단내림 수직 연결부
       line(dx + 0.35 * k, yC, dx + 0.9 * k, yC, 'A-FIN');                  // 중앙 평천장 마감
       line(dx + 0.35 * k, yC + 0.01 * k, dx + 0.9 * k, yC + 0.01 * k, 'A-FIN');  // 평천장 석고 1P
-      text(dx + 0.45 * k, dy + 0.75 * k, 0.13, '우물천장 상세 (4배)', '2-Tx_SIZE 2.5');
-      text(dx + 0.55 * k, (yB + yC) / 2, 0.08, '단내림 120', '2-Tx_SIZE 2.5');
-      text(dx + 0.17 * k, yB - 0.07 * k, 0.08, '밴드 W350', '2-Tx_SIZE 2.5');
+      text(dx + 0.45 * k, dy + 0.75 * k, 0.13, '우물천장 상세 (4배)', '2-Tx_2_5');
+      text(dx + 0.55 * k, (yB + yC) / 2, 0.08, '단내림 120', '2-Tx_2_5');
+      text(dx + 0.17 * k, yB - 0.07 * k, 0.08, '밴드 W350', '2-Tx_2_5');
       text(dx + 0.65 * k, ySl - 0.15 * k, 0.08, '목틀 30×30 @450', 'A-FIN');
       text(dx + 0.17 * k, yB - 0.15 * k, 0.08, '석고 9.5T+도배', 'A-FIN');
       EXT(dx + 1.0 * k, dy - 0.1); EXT(dx, dy + 0.85 * k);
@@ -328,8 +333,8 @@ export function buildDXFString() {
       line(lx2 + 0.01 * k, ly2 + 0.04 * k, lx2 - 0.02 * k, yC - 0.01 * k, 'A-ETC');
       arc(wallX - 0.05 * k, by0 + 0.03 * k, 0.04, 0, 360, 'A-FIN');        // 커튼레일
       line(wallX - 0.05 * k, by0, wallX - 0.05 * k, by0 - 0.15 * k, 'A-FIN');          // 커튼 드롭
-      text(dx + 0.4 * k, dy + 0.75 * k, 0.13, '간접등 커튼박스 상세 (4배)', '2-Tx_SIZE 2.5');
-      text(bx0 + 0.15 * k, by0 - 0.08 * k, 0.08, '커튼박스 300×180', '2-Tx_SIZE 2.5');
+      text(dx + 0.4 * k, dy + 0.75 * k, 0.13, '간접등 커튼박스 상세 (4배)', '2-Tx_2_5');
+      text(bx0 + 0.15 * k, by0 - 0.08 * k, 0.08, '커튼박스 300×180', '2-Tx_2_5');
       text(dx + 0.14 * k, ly2, 0.08, 'T5/LED 간접', 'A-FIN');
       text(bx0 - 0.1 * k, yC - 0.06 * k, 0.08, '몰딩 마감', 'A-FIN');
       text(wallX - 0.12 * k, by0 - 0.22 * k, 0.08, '커튼레일 공간', 'A-FIN');
@@ -338,8 +343,8 @@ export function buildDXFString() {
   }
 
   if (!isFinite(mnX)) return;
-  text(mnX + 0.2, mnY - 0.6, 0.2, `${P.name || 'PlanShot'}  ${P.company || ''}  단위 mm`, '2-Tx_SIZE 2.5', 0);
-  text(mnX + 0.2, mnY - 0.95, 0.12, '개략 실측 — 시공 발주 전 정밀실측 필요 / iPhone LiDAR', '2-Tx_SIZE 2.5', 0);
+  text(mnX + 0.2, mnY - 0.6, 0.2, `${P.name || 'PlanShot'}  ${P.company || ''}  단위 mm`, '2-Tx_2_5', 0);
+  text(mnX + 0.2, mnY - 0.95, 0.12, '개략 실측 — 시공 발주 전 정밀실측 필요 / iPhone LiDAR', '2-Tx_2_5', 0);
   EXT(mnX, mnY - 1.1);
 
   g(0, 'SECTION'); g(2, 'HEADER');
@@ -353,7 +358,7 @@ export function buildDXFString() {
   g(0, 'LTYPE'); g(2, 'CONTINUOUS'); g(70, '64'); g(3, 'Solid line'); g(72, '65'); g(73, '0'); g(40, '0.0');
   g(0, 'ENDTAB');
   const layers = [['0', 7], ['0-Sheet', 6], ['1-Axis', 9], ['1-Dim_axis', 150], ['1-Dim_axis-in', 8],
-                  ['1-SYM_room', 6], ['2-Tx_SIZE 2.5', 150], ['2-Tx_SIZE 1.5', 150],
+                  ['1-SYM_room', 6], ['2-Tx_2_5', 150], ['2-Tx_1_5', 150],
                   ['A-CON', 3], ['A-FIN', 8], ['A-WIN-sec', 150], ['A-DOOR-plan', 8],
                   ['A-FUR', 64], ['A-HATCH', 64], ['A-ETC', 9]];
   g(0, 'TABLE'); g(2, 'LAYER'); g(70, String(layers.length));
