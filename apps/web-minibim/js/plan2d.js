@@ -157,9 +157,12 @@ function paintRoom(g, r, off, P, s, th, interactive) {
           g.beginPath(); g.moveTo(a1[0], a1[1]); g.lineTo(b1[0], b1[1]); g.stroke();
         }
       };
-      if (r.floorFinish === 'fl_laminate' || r.floorFinish === 'fl_hardwood') grid(0, 0.15);
-      else if (r.floorFinish === 'fl_tile600') grid(0.6, 0.6);
-      else if (r.floorFinish === 'fl_tile300') grid(0.3, 0.3);
+      const _ff = r.floorFinish;
+      if (_ff === 'fl_laminate' || _ff === 'fl_hardwood' || _ff === 'fl_lamin12' || _ff === 'fl_ondol') grid(0, 0.15);
+      else if (_ff === 'fl_herring') grid(0, 0.09);
+      else if (_ff === 'fl_tile600' || _ff === 'fl_polish') grid(0.6, 0.6);
+      else if (_ff === 'fl_tile300') grid(0.3, 0.3);
+      else if (_ff === 'fl_decotile') grid(0.45, 0.45);
       g.restore();
       // 클립이 path 를 소모 → 선택 외곽선용으로 재구성
       g.beginPath();

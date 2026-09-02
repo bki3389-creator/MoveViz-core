@@ -6,6 +6,7 @@ import { OrbitControls } from '../vendor/addons/controls/OrbitControls.js';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { state, emit, layoutOffsets, wallsOf, wallCuts, ceilH, addLight, room, doorGeom, lightGridOf, finishColorOf } from './state.js';
 import { item, rateOf, FINISH_WALL } from './catalog.js';
+import { floorCanvas } from './textures.js';
 
 let renderer, scene, camera, controls, root, raycaster, container;
 let highlight = null;   // { mesh, prevEmissive }
@@ -287,59 +288,19 @@ function wallMat(finishId, col, lenM, hM) {
 }
 
 function floorTexture(finishId, baseColor) {
+  // 바닥 패턴은 textures.js(12/12 마감 커버 — 헤링본 포함)에 위임. UV=미터라 repeat=1/size.
   const fk = finishId + ':' + baseColor;
   if (texCache.has(fk)) return texCache.get(fk);
-  const SPEC = {
-    fl_laminate: { size: 1.2, kind: 'wood', plank: 0.15 },
-    fl_hardwood: { size: 1.2, kind: 'wood', plank: 0.12 },
-    fl_tile600:  { size: 1.2, kind: 'tile', tile: 0.6 },
-    fl_tile300:  { size: 1.2, kind: 'tile', tile: 0.3 },
-    fl_sheet:    { size: 1.2, kind: 'flat' },
-  }[finishId];
-  if (!SPEC) { texCache.set(fk, null); return null; }
-  const px = 512, c = document.createElement('canvas');
-  c.width = c.height = px;
-  const g = c.getContext('2d');
-  const col = '#' + baseColor.toString(16).padStart(6, '0');
-  g.fillStyle = col; g.fillRect(0, 0, px, px);
-  const mpp = px / SPEC.size;   // px per meter
-  if (SPEC.kind === 'wood') {
-    const rows = Math.round(SPEC.size / SPEC.plank);
-    for (let i = 0; i < rows; i++) {
-      const y = i * SPEC.plank * mpp;
-      // 플랭크별 미묘한 명도 변화 + 접합선 + 세로 조인트(엇갈림)
-      g.fillStyle = `rgba(${(i % 3) * 8 + 60},40,20,${0.05 + (i % 2) * 0.04})`;
-      g.fillRect(0, y, px, SPEC.plank * mpp);
-      g.strokeStyle = 'rgba(60,35,15,0.35)'; g.lineWidth = 1.2;
-      g.beginPath(); g.moveTo(0, y); g.lineTo(px, y); g.stroke();
-      const jx = ((i * 0.37) % 1) * px;
-      g.beginPath(); g.moveTo(jx, y); g.lineTo(jx, y + SPEC.plank * mpp); g.stroke();
-    }
-  } else if (SPEC.kind === 'tile') {
-    g.strokeStyle = 'rgba(70,80,90,0.45)'; g.lineWidth = 2;
-    for (let v = 0; v <= SPEC.size + 1e-6; v += SPEC.tile) {
-      const q = v * mpp;
-      g.beginPath(); g.moveTo(q, 0); g.lineTo(q, px); g.stroke();
-      g.beginPath(); g.moveTo(0, q); g.lineTo(px, q); g.stroke();
-    }
-  }
-  const tex = new THREE.CanvasTexture(c);
+  const fc = floorCanvas(finishId, baseColor);
+  if (!fc) { texCache.set(fk, null); return null; }
+  const tex = new THREE.CanvasTexture(fc.canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.repeat.set(1 / SPEC.size, 1 / SPEC.size);
   tex.anisotropy = 4;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.repeat.set(1 / fc.size, 1 / fc.size);
   texCache.set(fk, tex);
   return tex;
 }
-
-// ── 파라메트릭 가구 (footprint w×d 에 맞춰 조립) ──────────────
-const FM = {
-  wood: 0x9a7b52, woodDark: 0x7a5f3e, fabric: 0x93a7b1, fabricDark: 0x7b8f99,
-  white: 0xf2f2ef, metal: 0xdadee2, dark: 0x3a3f45, glass: 0x9fc4dd, bedding: 0xdfe6e2,
-};
-/// 가구 파트 재질 — 렌더샷(패스트레이서)에서 실제처럼: 목재는 결 텍스처, 금속은 반사,
-/// 도기(백색 저러프)는 유광, 패브릭은 고러프. FM 색으로 역할 판별.
-let furnWoodCv = null;
 function furnMat(color, rough) {
   if (color === FM.wood || color === FM.woodDark) {
     if (!furnWoodCv) {   // 나뭇결 캔버스 1회 생성
