@@ -2,7 +2,7 @@
 // RhinoBIM `bq`(물량 CSV)의 웹판: 모델을 바꾸면 즉시 재계산된다.
 
 import { state, emit, metricsOf, wallsOf } from './state.js';
-import { item, rateOf, KRW, CEIL_TYPES } from './catalog.js';
+import { item, ratesOf, KRW, CEIL_TYPES, canonId } from './catalog.js';
 
 const isWet = name => /욕실|화장실|발코니|베란다/.test(name || '');
 
@@ -17,13 +17,14 @@ export function buildEstimate() {
     const wallsAll = wallsOf(r);
     const push = (cat, id, qty, note = '') => {
       const it = item(id); if (!it || qty <= 0.001) return;
-      const rate = rateOf(id, P.rates);
+      const { m: rm, l: rl } = ratesOf(id, P.rates);
       rows.push({ roomName: r.name, cat, id, name: it.name, spec: it.spec, unit: it.unit,
-                  qty, rate, amount: qty * rate, note });
+                  qty, m: rm, l: rl, rate: rm + rl,
+                  amountM: qty * rm, amountL: qty * rl, amount: qty * (rm + rl), note });
     };
 
     // 바닥
-    push('바닥', r.floorFinish, m.area);
+    push('바닥', canonId(r.floorFinish), m.area);
     // 벽: 기본 마감 = 순면적 − 오버라이드 벽 면적, 오버라이드는 개별
     let overrideA = 0;
     for (const [wk, fid] of Object.entries(r.wallOverrides || {})) {
@@ -55,40 +56,48 @@ export function buildEstimate() {
     }
     for (const [id, n] of Object.entries(cnt)) push('조명', id, n);
     for (const [id, L] of Object.entries(len)) push('조명', id, L);
+    // 추가 공사 (창호·문·주방·욕실·전기·설비)
+    for (const ex of r.extras || []) push('추가공사', ex.id, ex.qty, '수동 입력');
   }
 
   const sub = rows.reduce((s, x) => s + x.amount, 0);
+  const subM = rows.reduce((s, x) => s + x.amountM, 0);
+  const subL = rows.reduce((s, x) => s + x.amountL, 0);
   const vat = sub * (P.vatPct || 0) / 100;
-  return { rows, sub, vat, total: sub + vat };
+  return { rows, sub, subM, subL, vat, total: sub + vat };
 }
 
 export function renderEstimate(elSummary, elTable) {
-  const { rows, sub, vat, total } = buildEstimate();
+  const { rows, sub, subM, subL, vat, total } = buildEstimate();
   elSummary.innerHTML = `
     <div class="est-sum">
-      <div><span>공사비 소계</span><b>${KRW(Math.round(sub))}원</b></div>
+      <div><span>재료비</span><b>${KRW(Math.round(subM))}원</b></div>
+      <div><span>노무비</span><b>${KRW(Math.round(subL))}원</b></div>
+      <div><span>소계</span><b>${KRW(Math.round(sub))}원</b></div>
       <div><span>부가세 ${state.project?.vatPct ?? 10}%</span><b>${KRW(Math.round(vat))}원</b></div>
       <div class="tot"><span>총계</span><b>${KRW(Math.round(total))}원</b></div>
-      <div class="disc">참고 단가 기준 개략 견적 — 단가를 우리 회사 값으로 수정하세요</div>
+      <div class="disc">참고 단가(재료/노무 분리) — 표에서 우리 회사 단가로 수정하세요</div>
     </div>`;
 
   let html = `<table class="est"><thead><tr>
-    <th>실</th><th>구분</th><th>품명</th><th>규격</th><th>단위</th>
-    <th class="r">수량</th><th class="r">단가</th><th class="r">금액</th></tr></thead><tbody>`;
+    <th>실</th><th>품명</th><th>단위</th>
+    <th class="r">수량</th><th class="r">재료단가</th><th class="r">노무단가</th><th class="r">금액</th></tr></thead><tbody>`;
   let lastRoom = '';
   for (const x of rows) {
     const q = x.unit === 'ea' ? String(Math.round(x.qty)) : x.qty.toFixed(1);
     html += `<tr>
       <td>${x.roomName !== lastRoom ? x.roomName : ''}</td>
-      <td>${x.cat}</td><td>${x.name}</td><td class="dim">${x.spec}</td><td>${unitKo(x.unit)}</td>
+      <td title="${x.cat} · ${x.spec}">${x.name}</td><td>${unitKo(x.unit)}</td>
       <td class="r">${q}</td>
-      <td class="r"><input class="rate-in" data-id="${x.id}" value="${KRW(x.rate)}" size="8"></td>
+      <td class="r"><input class="rate-in" data-id="${x.id}" data-kind="m" value="${KRW(x.m)}" size="7"></td>
+      <td class="r"><input class="rate-in" data-id="${x.id}" data-kind="l" value="${KRW(x.l)}" size="7"></td>
       <td class="r">${KRW(Math.round(x.amount))}</td></tr>`;
     lastRoom = x.roomName;
   }
-  html += `<tr class="sum"><td colspan="7">소계</td><td class="r">${KRW(Math.round(sub))}</td></tr>
-    <tr class="sum"><td colspan="7">부가세</td><td class="r">${KRW(Math.round(vat))}</td></tr>
-    <tr class="sum tot"><td colspan="7">총계</td><td class="r">${KRW(Math.round(total))}</td></tr>
+  html += `<tr class="sum"><td colspan="6">재료비 / 노무비</td><td class="r">${KRW(Math.round(subM))} / ${KRW(Math.round(subL))}</td></tr>
+    <tr class="sum"><td colspan="6">소계</td><td class="r">${KRW(Math.round(sub))}</td></tr>
+    <tr class="sum"><td colspan="6">부가세</td><td class="r">${KRW(Math.round(vat))}</td></tr>
+    <tr class="sum tot"><td colspan="6">총계</td><td class="r">${KRW(Math.round(total))}</td></tr>
     </tbody></table>
     <div class="disc" style="margin-top:6px">개략 실측(iPhone LiDAR) 기반 — 시공 발주 전 정밀실측 필요. 단가 수정은 즉시 반영·저장됩니다.</div>`;
   elTable.innerHTML = html;
@@ -97,8 +106,11 @@ export function renderEstimate(elSummary, elTable) {
   elTable.querySelectorAll('.rate-in').forEach(inp => {
     inp.addEventListener('change', () => {
       const v = Number(String(inp.value).replace(/[^\d]/g, ''));
-      if (!isNaN(v)) { state.project.rates[inp.dataset.id] = v; }
-      emit('rates');   // main 의 리스너가 견적만 재렌더 (3D 재구축 없음)
+      if (isNaN(v)) return;
+      const id = inp.dataset.id, kind = inp.dataset.kind;
+      const cur = ratesOf(id, state.project.rates);
+      state.project.rates[id] = { m: kind === 'm' ? v : cur.m, l: kind === 'l' ? v : cur.l };
+      emit('rates');
     });
   });
 }
@@ -106,16 +118,18 @@ export function renderEstimate(elSummary, elTable) {
 function unitKo(u) { return u === 'm2' ? '㎡' : u === 'm' ? 'm' : '개'; }
 
 export function exportCSV() {
-  const { rows, sub, vat, total } = buildEstimate();
-  const lines = [['실', '구분', '품명', '규격', '단위', '수량', '단가', '금액']];
+  const { rows, sub, subM, subL, vat, total } = buildEstimate();
+  const lines = [['실', '공종', '품명', '규격', '단위', '수량',
+                  '재료비 단가', '재료비 금액', '노무비 단가', '노무비 금액', '합계', '비고']];
   for (const x of rows) {
     lines.push([x.roomName, x.cat, x.name, x.spec, unitKo(x.unit),
-                x.unit === 'ea' ? Math.round(x.qty) : x.qty.toFixed(2), x.rate, Math.round(x.amount)]);
+                x.unit === 'ea' ? Math.round(x.qty) : x.qty.toFixed(2),
+                x.m, Math.round(x.amountM), x.l, Math.round(x.amountL), Math.round(x.amount), x.note || '실측 자동']);
   }
-  lines.push([], ['소계', '', '', '', '', '', '', Math.round(sub)],
-             ['부가세', '', '', '', '', '', '', Math.round(vat)],
-             ['총계', '', '', '', '', '', '', Math.round(total)],
-             [], ['개략 실측 - 시공 발주 전 정밀실측 필요']);
+  lines.push([], ['소계', '', '', '', '', '', '', Math.round(subM), '', Math.round(subL), Math.round(sub), ''],
+             ['부가세', '', '', '', '', '', '', '', '', '', Math.round(vat), '별도 표기'],
+             ['총계', '', '', '', '', '', '', '', '', '', Math.round(total), ''],
+             [], ['개략 실측 - 시공 발주 전 정밀실측 필요 · 단가=참고값(재료/노무 분리)']);
   const csv = '\uFEFF' + lines.map(l => l.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));

@@ -9,6 +9,7 @@ import { item } from './catalog.js';
 
 let cv, ctx, view = { z: 1, px: 0, py: 0 };
 let fit = { s: 60, ox: 40, oy: 40 };
+let fitDirty = true, fitKey = '';
 let drag = null;          // {kind:'pan'|'furn'|'opening'|'wall', ...}
 let wallDraw = null;      // 가벽 도구 첫 점 {roomId, x, z}
 let hoverWall = null;     // 문/창 도구 호버 표시
@@ -18,13 +19,17 @@ const DARK = {   // (이름 유지 — 인터랙티브 테마. 현재 화이트)
   wall: '#26303e', wallSel: '#157fbe', win: '#2f86bd', door: '#7a7468',
   furn: 'rgba(23,150,126,0.08)', furnLine: 'rgba(70,130,120,0.75)', furnSel: '#157fbe',
   light: '#b07d10', name: '#1d2734', nameSel: '#157fbe', sub: '#687382', dim: '#4c586a',
+  wallCore: '#f6f3ec',
 };
 const LIGHT = {
   bg: '#ffffff', fill: 'rgba(0,0,0,0.03)', fillSel: 'rgba(0,0,0,0.03)',
   wall: '#1a1a1a', wallSel: '#1a1a1a', win: '#3a7ca5', door: '#555555',
   furn: 'rgba(60,120,120,0.08)', furnLine: '#7a9a9a', furnSel: '#7a9a9a',
   light: '#b8860b', name: '#111111', nameSel: '#111111', sub: '#555555', dim: '#333333',
+  wallCore: '#ffffff',
 };
+
+function hexA(c, a) { return `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`; }
 
 export function init2D(canvas) {
   cv = canvas; ctx = cv.getContext('2d');
@@ -32,8 +37,8 @@ export function init2D(canvas) {
   cv.addEventListener('pointerdown', onDown);
   cv.addEventListener('pointermove', onMove);
   cv.addEventListener('pointerup', onUp);
-  cv.addEventListener('dblclick', () => { view = { z: 1, px: 0, py: 0 }; render2d(); });
-  new ResizeObserver(() => render2d()).observe(cv.parentElement);
+  cv.addEventListener('dblclick', () => { view = { z: 1, px: 0, py: 0 }; fitDirty = true; render2d(); });
+  new ResizeObserver(() => { fitDirty = true; render2d(); }).observe(cv.parentElement);
 }
 
 function S() { return fit.s * view.z; }
@@ -45,8 +50,7 @@ function evPx(e) {   // CSS px → 캔버스 버퍼 px (크기 불일치 보정)
           (e.clientY - rect.top) * cv.height / rect.height];
 }
 
-function computeFit() {
-  const offs = layoutOffsets();
+function computeFit(offs) {
   let maxX = 1, maxZ = 1;
   for (const r of state.project?.rooms || []) {
     const o = offs[r.id]; if (!o?.bb) continue;
@@ -57,7 +61,6 @@ function computeFit() {
   fit.s = Math.max(8, Math.min(Math.min((W - m * 2) / maxX, (H - m * 2) / maxZ), 140));
   fit.ox = (W - maxX * fit.s) / 2;
   fit.oy = (H - maxZ * fit.s) / 2;
-  return offs;
 }
 
 export function render2d() {
@@ -71,7 +74,9 @@ export function render2d() {
     ctx.fillText('plan.json 을 드래그하거나 [샘플 열기]를 누르세요', cv.width / 2, cv.height / 2);
     return;
   }
-  const offs = computeFit();
+  const offs = layoutOffsets();
+  const key = (state.project?.rooms || []).map(x => x.id).join(',');
+  if (fitDirty || key !== fitKey) { computeFit(offs); fitKey = key; fitDirty = false; }
   for (const r of state.project.rooms) {
     const off = offs[r.id];
     if (off?.bb) paintRoom(ctx, r, off, (x, z) => toPx(x + off.x, z + off.z), S(), DARK, true);
@@ -120,8 +125,37 @@ function paintRoom(g, r, off, P, s, th, interactive) {
     g.beginPath();
     bd.forEach((p, i) => { const [x, y] = P(p[0], p[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); });
     g.closePath();
-    g.fillStyle = selected ? th.fillSel : th.fill;
+    const ff = item(r.floorFinish);
+    g.fillStyle = ff?.color != null ? hexA(ff.color, 0.28) : th.fill;
     g.fill();
+    // 바닥 마감 해칭 (클립 후 작도)
+    if (s > 16 && ff) {
+      g.save(); g.clip();
+      g.strokeStyle = 'rgba(40,50,65,0.13)'; g.lineWidth = 0.75;
+      const bbx = { x0: Math.min(...bd.map(q => q[0])), x1: Math.max(...bd.map(q => q[0])),
+                    z0: Math.min(...bd.map(q => q[1])), z1: Math.max(...bd.map(q => q[1])) };
+      const grid = (dx, dz) => {
+        if (dx) for (let x = Math.ceil(bbx.x0 / dx) * dx; x < bbx.x1; x += dx) {
+          const a1 = P(x, bbx.z0), b1 = P(x, bbx.z1);
+          g.beginPath(); g.moveTo(a1[0], a1[1]); g.lineTo(b1[0], b1[1]); g.stroke();
+        }
+        if (dz) for (let z = Math.ceil(bbx.z0 / dz) * dz; z < bbx.z1; z += dz) {
+          const a1 = P(bbx.x0, z), b1 = P(bbx.x1, z);
+          g.beginPath(); g.moveTo(a1[0], a1[1]); g.lineTo(b1[0], b1[1]); g.stroke();
+        }
+      };
+      if (r.floorFinish === 'fl_laminate' || r.floorFinish === 'fl_hardwood') grid(0, 0.15);
+      else if (r.floorFinish === 'fl_tile600') grid(0.6, 0.6);
+      else if (r.floorFinish === 'fl_tile300') grid(0.3, 0.3);
+      g.restore();
+      // 클립이 path 를 소모 → 선택 외곽선용으로 재구성
+      g.beginPath();
+      bd.forEach((q, i) => { const [x, y] = P(q[0], q[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+      g.closePath();
+    }
+    if (selected) {
+      g.save(); g.strokeStyle = th.wallSel; g.setLineDash([6, 4]); g.lineWidth = 1.2; g.stroke(); g.restore();
+    }
   }
 
   for (const w of wallsOf(r)) {
@@ -133,15 +167,25 @@ function paintRoom(g, r, off, P, s, th, interactive) {
     for (const o of w.openings) { if (o.lo > cursor) pieces.push([cursor, o.lo]); cursor = Math.max(cursor, o.hi); }
     if (cursor < w.hi) pieces.push([cursor, w.hi]);
     if (!w.openings.length) { pieces.length = 0; pieces.push([w.lo, w.hi]); }
-    g.strokeStyle = selWall ? th.wallSel : (hovered ? '#d99a1b' : th.wall);
-    g.lineWidth = t; g.lineCap = 'butt';
-    for (const [a, b] of pieces) {
-      g.beginPath();
-      const p1 = w.dir === 'z' ? P(a, w.pos) : P(w.pos, a);
-      const p2 = w.dir === 'z' ? P(b, w.pos) : P(w.pos, b);
-      g.moveTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]); g.stroke();
-    }
+    g.lineCap = 'butt';
+    const halfM = (w.inner ? 0.10 : 0.15) / 2;   // 코너 채움용 반두께(m)
+    const ext = pieces.map(([a0, b0]) => [
+      Math.abs(a0 - w.lo) < 1e-9 ? a0 - halfM : a0,     // 벽 끝단 = 코너 → 연장
+      Math.abs(b0 - w.hi) < 1e-9 ? b0 + halfM : b0,
+    ]);
+    const strokePieces = (color, width) => {
+      g.strokeStyle = color; g.lineWidth = width;
+      for (const [a, b] of ext) {
+        g.beginPath();
+        const p1 = w.dir === 'z' ? P(a, w.pos) : P(w.pos, a);
+        const p2 = w.dir === 'z' ? P(b, w.pos) : P(w.pos, b);
+        g.moveTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]); g.stroke();
+      }
+    };
+    strokePieces(selWall ? th.wallSel : (hovered ? '#d99a1b' : th.wall), t);
+    if (t >= 5) strokePieces(selWall ? '#cfe8f5' : th.wallCore, Math.max(1, t - 3));   // 이중선 코어
     for (const o of w.openings) {
+      if (o.foreign) continue;   // 컷은 위 pieces 에서 반영됨 — 심볼은 소유 방이 그림
       const selOp = sel?.kind === 'opening' && sel.roomId === r.id && sel.openingIdx === o.idx;
       const a = w.dir === 'z' ? P(o.lo, w.pos) : P(w.pos, o.lo);
       const b = w.dir === 'z' ? P(o.hi, w.pos) : P(w.pos, o.hi);
@@ -151,14 +195,31 @@ function paintRoom(g, r, off, P, s, th, interactive) {
           const dx = w.dir === 'z' ? 0 : k * t, dy = w.dir === 'z' ? k * t : 0;
           g.beginPath(); g.moveTo(a[0] + dx, a[1] + dy); g.lineTo(b[0] + dx, b[1] + dy); g.stroke();
         }
+        // 잼(개구부 양끝 마감선)
+        g.strokeStyle = th.wall; g.lineWidth = 1.4;
+        for (const pt of [a, b]) {
+          g.beginPath();
+          if (w.dir === 'z') { g.moveTo(pt[0], pt[1] - t / 2 - 1); g.lineTo(pt[0], pt[1] + t / 2 + 1); }
+          else { g.moveTo(pt[0] - t / 2 - 1, pt[1]); g.lineTo(pt[0] + t / 2 + 1, pt[1]); }
+          g.stroke();
+        }
       } else {
         const rpx = Math.hypot(b[0] - a[0], b[1] - a[1]);
         const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+        // 스윙 방향: 평면 좌표에서 호 중간점(45°)이 방 안쪽인 쪽 선택
+        const hx = w.dir === 'z' ? o.lo : w.pos;
+        const hz = w.dir === 'z' ? w.pos : o.lo;
+        const ax2 = w.dir === 'z' ? 1 : 0, az2 = w.dir === 'z' ? 0 : 1;   // 벽 진행 방향
+        const nx2 = w.dir === 'z' ? 0 : 1, nz2 = w.dir === 'z' ? 1 : 0;   // 법선
+        const k = o.w * 0.6;
+        const insidePlus = inPoly(hx + (ax2 + nx2) * k * 0.707, hz + (az2 + nz2) * k * 0.707, plan.boundary || []);
+        const sgn = insidePlus ? 1 : -1;
         g.strokeStyle = selOp ? th.wallSel : th.door; g.lineWidth = selOp ? 2 : 1.4;
+        const ea = ang + sgn * Math.PI / 2;
         g.beginPath(); g.moveTo(a[0], a[1]);
-        g.lineTo(a[0] + rpx * Math.cos(ang + Math.PI / 2), a[1] + rpx * Math.sin(ang + Math.PI / 2)); g.stroke();
+        g.lineTo(a[0] + rpx * Math.cos(ea), a[1] + rpx * Math.sin(ea)); g.stroke();
         g.setLineDash([3, 3]); g.lineWidth = 1;
-        g.beginPath(); g.arc(a[0], a[1], rpx, ang, ang + Math.PI / 2); g.stroke();
+        g.beginPath(); g.arc(a[0], a[1], rpx, ang, ea, sgn < 0); g.stroke();
         g.setLineDash([]);
       }
       // 개구부 폭 라벨 (선택 시)
@@ -187,7 +248,7 @@ function paintRoom(g, r, off, P, s, th, interactive) {
         const cz = cs.reduce((a, p) => a + p[1], 0) / cs.length;
         const [x, y] = P(cx, cz);
         g.fillStyle = selF ? th.furnSel : th.furnLine;
-        g.font = `${Math.max(8, 0.16 * s)}px sans-serif`; g.textAlign = 'center';
+        g.font = `${Math.max(8, Math.min(10, 0.16 * s))}px sans-serif`; g.textAlign = 'center';
         g.fillText(f.category_ko || '', x, y);
       }
     });
@@ -201,7 +262,7 @@ function paintRoom(g, r, off, P, s, th, interactive) {
       const a = P(l.x, l.z), b = P(l.x2, l.z2);
       g.lineWidth = 3; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     } else {
-      const [x, y] = P(l.x, l.z), rr = Math.max(3, 0.08 * s);
+      const [x, y] = P(l.x, l.z), rr = Math.min(7, Math.max(3, 0.08 * s));
       g.lineWidth = 1.4;
       g.beginPath(); g.arc(x, y, rr, 0, Math.PI * 2); g.stroke();
       g.beginPath(); g.moveTo(x - rr, y); g.lineTo(x + rr, y); g.moveTo(x, y - rr); g.lineTo(x, y + rr); g.stroke();
@@ -209,17 +270,49 @@ function paintRoom(g, r, off, P, s, th, interactive) {
   }
 
   const bb = off.bb;
+  const pxW2 = (bb.maxX - bb.minX) * s, pxH2 = (bb.maxZ - bb.minZ) * s;
   const [cx, cy] = P((bb.minX + bb.maxX) / 2, (bb.minZ + bb.maxZ) / 2);
-  g.textAlign = 'center';
-  g.fillStyle = selected ? th.nameSel : th.name;
-  g.font = `600 ${Math.max(11, 0.22 * s)}px sans-serif`;
-  g.fillText(r.name, cx, cy - 0.1 * s);
-  g.fillStyle = th.sub; g.font = `${Math.max(9, 0.15 * s)}px sans-serif`;
-  g.fillText(`${m.area.toFixed(2)}㎡ · ${m.pyeong.toFixed(1)}평 · CH ${(m.H * 1000) | 0}`, cx, cy + 0.14 * s);
+  if (Math.min(pxW2, pxH2) > 46) {
+    g.textAlign = 'center';
+    g.fillStyle = selected ? th.nameSel : th.name;
+    g.font = `600 ${Math.max(10, Math.min(13, 0.2 * s))}px sans-serif`;
+    g.fillText(r.name, cx, cy - 4);
+    if (pxW2 > 130) {
+      g.fillStyle = th.sub; g.font = `${Math.max(8, Math.min(10, 0.14 * s))}px sans-serif`;
+      const subTxt = pxW2 > 190
+        ? `${m.area.toFixed(2)}㎡ · ${m.pyeong.toFixed(1)}평 · CH ${(m.H * 1000) | 0}`
+        : `${m.area.toFixed(1)}㎡`;
+      g.fillText(subTxt, cx, cy + 12);
+      if (pxW2 > 190) {
+        g.fillStyle = 'rgba(90,100,115,0.85)'; g.font = '9px sans-serif';
+        g.fillText(`${item(r.floorFinish)?.name ?? ''} · ${item(r.wallFinish)?.name ?? ''} · ${item(r.ceilFinish)?.name ?? ''}`, cx, cy + 26);
+      }
+    }
+  }
 
+  // 치수선 — 다른 방과 붙은 변에는 생략(어수선 방지), 반대편이 비어 있으면 그쪽에.
   const mm = v => Math.round(v * 1000).toLocaleString('ko-KR');
-  dim(P(bb.minX, bb.maxZ), P(bb.maxX, bb.maxZ), [0, 1], mm(bb.maxX - bb.minX));
-  dim(P(bb.minX, bb.minZ), P(bb.minX, bb.maxZ), [-1, 0], mm(bb.maxZ - bb.minZ));
+  const adj = { L: false, R: false, T: false, B: false };
+  if (interactive && off.x != null) {
+    const offsAll = layoutOffsets();
+    const aL = off.x + bb.minX, aR = off.x + bb.maxX, aT = off.z + bb.minZ, aB = off.z + bb.maxZ;
+    for (const other of state.project?.rooms || []) {
+      if (other.id === r.id) continue;
+      const ob = offsAll[other.id]; if (!ob?.bb) continue;
+      const bL = ob.x + ob.bb.minX, bR = ob.x + ob.bb.maxX, bT = ob.z + ob.bb.minZ, bB = ob.z + ob.bb.maxZ;
+      const xOv = Math.min(aR, bR) - Math.max(aL, bL) > 0.3;
+      const zOv = Math.min(aB, bB) - Math.max(aT, bT) > 0.3;
+      if (zOv && Math.abs(bL - aR) < 0.35) adj.R = true;
+      if (zOv && Math.abs(bR - aL) < 0.35) adj.L = true;
+      if (xOv && Math.abs(bT - aB) < 0.35) adj.B = true;
+      if (xOv && Math.abs(bB - aT) < 0.35) adj.T = true;
+    }
+  }
+  // 모든 실이 치수를 갖는다 — 붙은 변이면 반대편, 둘 다 붙었으면 그래도 표기
+  if (!adj.B || adj.T) dim(P(bb.minX, bb.maxZ), P(bb.maxX, bb.maxZ), [0, 1], mm(bb.maxX - bb.minX));
+  else dim(P(bb.minX, bb.minZ), P(bb.maxX, bb.minZ), [0, -1], mm(bb.maxX - bb.minX));
+  if (!adj.L || adj.R) dim(P(bb.minX, bb.minZ), P(bb.minX, bb.maxZ), [-1, 0], mm(bb.maxZ - bb.minZ));
+  else dim(P(bb.maxX, bb.minZ), P(bb.maxX, bb.maxZ), [1, 0], mm(bb.maxZ - bb.minZ));
 
   function dim(a, b, out, label) {
     const o2 = 26;
@@ -265,6 +358,7 @@ function hitAt(wx, wz) {
       const dist = w.dir === 'z' ? Math.abs(lz - w.pos) : Math.abs(lx - w.pos);
       if (dist > Math.max(tol, 0.12) || t < w.lo - 0.1 || t > w.hi + 0.1) continue;
       for (const op of w.openings) {
+        if (op.foreign) continue;
         if (t >= op.lo - 0.05 && t <= op.hi + 0.05) {
           return { kind: 'opening', r, openingIdx: op.idx, wall: w, t };
         }

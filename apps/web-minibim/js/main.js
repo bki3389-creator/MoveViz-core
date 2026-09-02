@@ -1,6 +1,6 @@
 // main.js — UI 배선: 헤더/탭/2D 편집 도구/좌측 방 목록/우측 인스펙터/견적/인쇄(도면+견적).
 
-import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore,
+import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore, addExtra, setExtraQty,
          selectedRoom, room, metricsOf, wallsOf, removeLight, undo,
          updateOpening, removeOpening, removeInnerWall, scaleRoom,
          addFurniture, rotateFurniture, resizeFurniture, removeFurniture, arrangeRooms } from './state.js';
@@ -9,7 +9,7 @@ import { init3D, rebuild3D, frameAll, clearHighlight } from './scene3d.js';
 import { renderEstimate, exportCSV, buildEstimate } from './estimate.js';
 import { exportDXF } from './dxf.js';
 import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS, FURN_ITEMS,
-         item, KRW } from './catalog.js';
+         EXTRA_ITEMS, item, KRW, canonId, unitKo2 } from './catalog.js';
 
 const $ = id => document.getElementById(id);
 const mmOf = m => Math.round(m * 1000);
@@ -138,6 +138,7 @@ LIGHTS.forEach(l => { const o = document.createElement('option'); o.value = l.id
 lightSel.value = state.lightType;
 lightSel.onchange = () => { state.lightType = lightSel.value; syncToolbar(); };
 $('chkCeil').onchange = e => { state.showCeiling = e.target.checked; rebuild3D(); };
+$('chkFX').onchange = e => { state.lightFX = e.target.checked; rebuild3D(); };
 $('chkFurn').onchange = e => { state.showFurniture = e.target.checked; rebuild3D(); render2d(); };
 $('btnFrame').onclick = () => frameAll();
 $('btnArrange').onclick = () => { if (confirm('방 배치를 일렬로 초기화할까요?')) { arrangeRooms(); frameAll(); } };
@@ -227,8 +228,9 @@ function sel(label, options, value, onchange, extra) {
   for (const o of (extra || []).concat(options)) {
     const op = document.createElement('option');
     op.value = o.id;
-    op.textContent = o.rate != null
-      ? `${o.name} (${KRW(o.rate)}원/${o.unit === 'm2' ? '㎡' : o.unit === 'm' ? 'm' : '개'})` : o.name;
+    const tot = (o.mat ?? 0) + (o.lab ?? 0);
+    op.textContent = (o.mat != null || o.lab != null)
+      ? `${o.name} (${KRW(tot)}원/${o.unit === 'm2' ? '㎡' : o.unit === 'm' ? 'm' : '개'})` : o.name;
     s.appendChild(op);
   }
   s.value = value ?? (extra?.[0]?.id ?? options[0].id);
@@ -320,7 +322,7 @@ function renderInspector() {
     nameIn.value = r.name;
     nameIn.onchange = () => { r.name = nameIn.value; emit('project'); };
     el.appendChild(fld('방 이름', nameIn));
-    el.appendChild(sel('바닥 마감', FINISH_FLOOR, r.floorFinish, v => { r.floorFinish = v; emit('project'); }));
+    el.appendChild(sel('바닥 마감', FINISH_FLOOR, canonId(r.floorFinish), v => { r.floorFinish = v; emit('project'); }));
     el.appendChild(sel('벽 마감(기본)', FINISH_WALL, r.wallFinish, v => { r.wallFinish = v; emit('project'); }));
     el.appendChild(sel('천장 마감', FINISH_CEIL, r.ceilFinish, v => { r.ceilFinish = v; emit('project'); }));
     el.appendChild(sel('천장 유형', CEIL_TYPES, r.ceilingType, v => { r.ceilingType = v; emit('project'); }));
@@ -343,6 +345,42 @@ function renderInspector() {
       state.sel = { kind: 'furniture', roomId: r.id, furnIdx: idx };
       emit('select');
     }));
+
+    // 추가 공사 (창호·문·주방·욕실·전기·설비)
+    const exSel = document.createElement('select');
+    let lastG = '';
+    for (const e2 of EXTRA_ITEMS) {
+      if (e2.group !== lastG) {
+        const og = document.createElement('optgroup'); og.label = e2.group; exSel.appendChild(og); lastG = e2.group;
+      }
+      const op2 = document.createElement('option');
+      op2.value = e2.id;
+      op2.textContent = `${e2.name} (${KRW((e2.mat ?? 0) + (e2.lab ?? 0))}원/${unitKo2(e2.unit)})`;
+      exSel.lastChild.appendChild(op2);
+    }
+    el.appendChild(fld('추가 공사 (창호·문·주방·욕실…)', exSel));
+    el.appendChild(btn('+ 이 실에 추가', '', () => { addExtra(r, exSel.value, 1); }));
+    if (r.extras?.length) {
+      const list = document.createElement('div');
+      for (const ex of r.extras) {
+        const it2 = item(ex.id); if (!it2) continue;
+        const row2 = document.createElement('div');
+        row2.style.cssText = 'display:flex;align-items:center;gap:6px;margin:4px 0;font-size:12px';
+        const qin = document.createElement('input');
+        qin.value = ex.qty; qin.inputMode = 'decimal';
+        qin.style.cssText = 'width:52px;text-align:right;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:3px 5px;color:var(--ink)';
+        qin.onchange = () => setExtraQty(r, ex.id, Number(qin.value) || 0);
+        const del2 = document.createElement('button');
+        del2.textContent = '×'; del2.style.cssText = 'background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px';
+        del2.onclick = () => setExtraQty(r, ex.id, 0);
+        const lbl = document.createElement('span');
+        lbl.style.flex = '1';
+        lbl.textContent = `${it2.name} (${unitKo2(it2.unit)})`;
+        row2.append(lbl, qin, del2);
+        list.appendChild(row2);
+      }
+      el.appendChild(list);
+    }
 
     // 실측 보정 (레이저)
     const det = document.createElement('details');

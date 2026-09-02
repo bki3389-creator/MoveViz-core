@@ -10,6 +10,7 @@ export const state = {
   pendingLine: null,      // 라인조명 첫 클릭점 {x,z}
   showCeiling: false,
   showFurniture: true,
+  lightFX: false,     // 3D 실광원 효과(기본 꺼짐 — 재료 확인 모드)
   listeners: new Set(),
 };
 
@@ -44,7 +45,7 @@ export function addRoom(plan, name) {
     plan,
     floorFinish: 'fl_laminate', wallFinish: 'wl_silk', ceilFinish: 'cl_silk',
     wallOverrides: {}, wallTypes: {}, ceilingType: 'ct_keep',
-    lights: [],
+    lights: [], extras: [],
   };
   state.project.rooms.push(r);
   state.selRoom = r.id;
@@ -113,18 +114,36 @@ export function wallsOf(r) {
     if (s.length >= 2) walls.push(mkWall('z' + wi + '_' + si, s[0], w.pos, s[1], w.pos, true));
   }));
 
-  const ops = allOpenings(plan).map((op, oi) => ({ op, oi }));   // oi = plan.openings 인덱스(정규화 후)
+  const ops = allOpenings(plan).map((op, oi) => ({ op, oi, foreign: false, dPos: { x: 0, z: 0 } }));
+  // 공유벽 전파: 조립된 다른 방의 개구부가 이 벽과 같은 세계선상에 있으면 이 벽도 뚫는다
+  // (문이 한쪽 벽만 뚫리는 문제 해결 — 렌더는 컷만, 심볼·선택·개수는 소유 방이 담당)
+  if (state.project && r.pos) {
+    for (const other of state.project.rooms) {
+      if (other.id === r.id || !other.pos) continue;
+      for (const op of other.plan?.openings || []) {
+        ops.push({ op, oi: -1, foreign: true,
+                   dPos: { x: other.pos.x - r.pos.x, z: other.pos.z - r.pos.z } });
+      }
+    }
+  }
   for (const wall of walls) {
-    for (const { op, oi } of ops) {
+    for (const { op, oi, foreign, dPos } of ops) {
       if (!op.wall_dir || op.wall_pos == null || !op.span || op.span.length < 2) continue;
       if (op.wall_dir !== wall.dir) continue;
-      if (Math.abs(op.wall_pos - wall.pos) > 0.18) continue;
-      const lo = Math.max(Math.min(op.span[0], op.span[1]), wall.lo);
-      const hi = Math.min(Math.max(op.span[0], op.span[1]), wall.hi);
+      // foreign 개구부는 상대 방 로컬 좌표 → 이 방 로컬로 변환
+      const shift = op.wall_dir === 'z' ? dPos.z : dPos.x;       // 벽 법선축 이동량
+      const along = op.wall_dir === 'z' ? dPos.x : dPos.z;       // 벽 진행축 이동량
+      const wp = op.wall_pos + (foreign ? shift : 0);
+      if (Math.abs(wp - wall.pos) > (foreign ? 0.3 : 0.18)) continue;
+      const s0 = op.span[0] + (foreign ? along : 0), s1 = op.span[1] + (foreign ? along : 0);
+      const lo = Math.max(Math.min(s0, s1), wall.lo);
+      const hi = Math.min(Math.max(s0, s1), wall.hi);
       if (hi - lo < 0.15) continue;
       const isWin = op.type === 'window';
       const h = op.height ?? (isWin ? 1.2 : 2.1);
-      wall.openings.push({ type: isWin ? 'window' : 'door', lo, hi, w: hi - lo, h: Math.min(h, H - 0.05), idx: oi });
+      if (foreign && wall.openings.some(x => !x.foreign && x.lo < hi && x.hi > lo)) continue;  // 자체 개구부와 겹치면 생략
+      wall.openings.push({ type: isWin ? 'window' : 'door', lo, hi, w: hi - lo,
+                           h: Math.min(h, H - 0.05), idx: oi, foreign });
     }
     wall.openings.sort((p, q) => p.lo - q.lo);
     wall.grossArea = wall.len * H;
@@ -153,6 +172,7 @@ export function metricsOf(r) {
   let doorW = 0, doors = 0, windows = 0, openA = 0;
   for (const w of outer) for (const o of w.openings) {
     openA += o.w * o.h;
+    if (o.foreign) continue;   // 상대 방 소유 — 개수는 그쪽에서
     if (o.type === 'door') { doors++; doorW += o.w; } else windows++;
   }
   const wallNet = Math.max(0, per * H - openA);
@@ -232,6 +252,7 @@ export function loadJSONText(text, filename) {
     obj.rooms.forEach(r => {
       normalizePlan(r.plan);
       if (!r.lights) r.lights = [];
+      if (!r.extras) r.extras = [];
       if (!r.wallOverrides) r.wallOverrides = {};
       if (!r.wallTypes) r.wallTypes = {};
     });
@@ -512,5 +533,19 @@ export function resizeFurniture(r, idx, w, d) {
   const obb = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([a, b]) =>
     [cx + a * ca - b * sa, cz + a * sa + b * ca]);
   if (f.obb) f.obb = obb; else f.polygon = obb;
+  emit('project');
+}
+
+// 추가 공사 항목 (창호/문/주방/욕실/전기/설비 … EXTRA_ITEMS)
+export function addExtra(r, id, qty) {
+  if (!r.extras) r.extras = [];
+  const ex = r.extras.find(x => x.id === id);
+  if (ex) ex.qty += qty; else r.extras.push({ id, qty });
+  emit('project');
+}
+export function setExtraQty(r, id, qty) {
+  if (!r.extras) return;
+  if (qty <= 0) r.extras = r.extras.filter(x => x.id !== id);
+  else { const ex = r.extras.find(x => x.id === id); if (ex) ex.qty = qty; }
   emit('project');
 }
