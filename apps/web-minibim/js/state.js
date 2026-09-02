@@ -165,16 +165,60 @@ export function metricsOf(r) {
   };
 }
 
-// 방 배치 오프셋(2D/3D 공용): X축으로 나열, 간격 1.5m
+// 방 배치 오프셋(2D/3D 공용): room.pos(사용자 배치, 저장됨)가 있으면 그걸 쓰고,
+// 없으면 X축 나열로 초기화해 pos 에 기록. 방은 드래그로 조립(자석 스냅)한다 —
+// 방별 스캔은 좌표계가 제각각이라 세대 조립은 사용자가 배치로 확정.
 export function layoutOffsets() {
-  const off = {}; let x = 0;
+  const off = {}; let nextX = 0;
   for (const r of state.project?.rooms || []) {
     const bb = bboxOf(r.plan);
-    if (!bb) { off[r.id] = { x: x, z: 0, bb: null }; continue; }
-    off[r.id] = { x: x - bb.minX, z: -bb.minZ, bb };
-    x += (bb.maxX - bb.minX) + 1.5;
+    if (!bb) { off[r.id] = { x: 0, z: 0, bb: null }; continue; }
+    if (!r.pos || typeof r.pos.x !== 'number') {
+      r.pos = { x: nextX - bb.minX, z: -bb.minZ };
+    }
+    nextX = Math.max(nextX, r.pos.x + bb.maxX + 0.8);
+    off[r.id] = { x: r.pos.x, z: r.pos.z, bb };
   }
   return off;
+}
+
+/// 방 전체 이동 (2D 드래그) — 월드 delta.
+export function moveRoomBy(r, dx, dz) {
+  if (!r.pos) layoutOffsets();
+  r.pos.x += dx; r.pos.z += dz;
+}
+
+/// 드래그 종료 시: 50mm 격자 + 다른 방 외곽에 자석(0.25m) — 변 맞대기·모서리 정렬.
+export function snapRoomPos(r) {
+  const bb = bboxOf(r.plan); if (!bb || !r.pos) return;
+  r.pos.x = Math.round(r.pos.x * 20) / 20;
+  r.pos.z = Math.round(r.pos.z * 20) / 20;
+  const M = 0.25;
+  let bestDX = null, bestDZ = null;
+  const myL = r.pos.x + bb.minX, myR = r.pos.x + bb.maxX;
+  const myT = r.pos.z + bb.minZ, myB = r.pos.z + bb.maxZ;
+  for (const other of state.project?.rooms || []) {
+    if (other.id === r.id || !other.pos) continue;
+    const ob = bboxOf(other.plan); if (!ob) continue;
+    const oL = other.pos.x + ob.minX, oR = other.pos.x + ob.maxX;
+    const oT = other.pos.z + ob.minZ, oB = other.pos.z + ob.maxZ;
+    // X 후보: 내 좌변↔상대 우변, 내 우변↔상대 좌변, 좌↔좌, 우↔우
+    for (const d of [oR - myL, oL - myR, oL - myL, oR - myR]) {
+      if (Math.abs(d) < M && (bestDX === null || Math.abs(d) < Math.abs(bestDX))) bestDX = d;
+    }
+    for (const d of [oB - myT, oT - myB, oT - myT, oB - myB]) {
+      if (Math.abs(d) < M && (bestDZ === null || Math.abs(d) < Math.abs(bestDZ))) bestDZ = d;
+    }
+  }
+  if (bestDX !== null) r.pos.x += bestDX;
+  if (bestDZ !== null) r.pos.z += bestDZ;
+}
+
+/// 전체 자동 정렬(일렬)로 리셋.
+export function arrangeRooms() {
+  for (const r of state.project?.rooms || []) r.pos = null;
+  layoutOffsets();
+  emit('project');
 }
 
 // ── 파일 IO ──────────────────────────────────────────────
@@ -258,13 +302,15 @@ export const snap = v => Math.round(v / SNAP) * SNAP;
 const _hist = [];
 export function pushHistory(r) {
   _hist.push({ roomId: r.id, plan: JSON.parse(JSON.stringify(r.plan)),
-               lights: JSON.parse(JSON.stringify(r.lights || [])) });
+               lights: JSON.parse(JSON.stringify(r.lights || [])),
+               pos: r.pos ? { ...r.pos } : null });
   if (_hist.length > 30) _hist.shift();
 }
 export function undo() {
   const h = _hist.pop(); if (!h) return false;
   const r = room(h.roomId); if (!r) return false;
   r.plan = h.plan; r.lights = h.lights;
+  if (h.pos) r.pos = { ...h.pos };
   state.sel = null;
   emit('project');
   return true;

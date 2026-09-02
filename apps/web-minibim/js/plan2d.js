@@ -3,7 +3,8 @@
 // 슬라이드 = 내적 투영, 벽 드래그 = 법선 방향 이동. 인쇄용 방별 렌더(renderRoomImage) 포함.
 
 import { state, emit, layoutOffsets, wallsOf, metricsOf, room, snap,
-         addOpening, slideOpening, addInnerWall, moveWall, moveFurniture, pushHistory } from './state.js';
+         addOpening, slideOpening, addInnerWall, moveWall, moveFurniture, pushHistory,
+         moveRoomBy, snapRoomPos } from './state.js';
 import { item } from './catalog.js';
 
 let cv, ctx, view = { z: 1, px: 0, py: 0 };
@@ -12,11 +13,11 @@ let drag = null;          // {kind:'pan'|'furn'|'opening'|'wall', ...}
 let wallDraw = null;      // 가벽 도구 첫 점 {roomId, x, z}
 let hoverWall = null;     // 문/창 도구 호버 표시
 
-const DARK = {
-  bg: '#101318', fill: 'rgba(255,255,255,0.03)', fillSel: 'rgba(33,158,217,0.10)',
-  wall: '#e8e4da', wallSel: '#219ed9', win: '#7fc4e8', door: '#c9c2b4',
-  furn: 'rgba(56,178,172,0.10)', furnLine: 'rgba(160,200,200,0.7)', furnSel: '#219ed9',
-  light: '#e9c46a', name: '#d8d3c8', nameSel: '#4fc3f7', sub: '#8b94a3', dim: '#c8c3b4',
+const DARK = {   // (이름 유지 — 인터랙티브 테마. 현재 화이트)
+  bg: '#fbfcfd', fill: 'rgba(30,45,65,0.035)', fillSel: 'rgba(21,127,190,0.08)',
+  wall: '#26303e', wallSel: '#157fbe', win: '#2f86bd', door: '#7a7468',
+  furn: 'rgba(23,150,126,0.08)', furnLine: 'rgba(70,130,120,0.75)', furnSel: '#157fbe',
+  light: '#b07d10', name: '#1d2734', nameSel: '#157fbe', sub: '#687382', dim: '#4c586a',
 };
 const LIGHT = {
   bg: '#ffffff', fill: 'rgba(0,0,0,0.03)', fillSel: 'rgba(0,0,0,0.03)',
@@ -66,7 +67,7 @@ export function render2d() {
   ctx.clearRect(0, 0, cv.width, cv.height);
   ctx.fillStyle = DARK.bg; ctx.fillRect(0, 0, cv.width, cv.height);
   if (!state.project?.rooms.length) {
-    ctx.fillStyle = '#5a6472'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#8a94a4'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('plan.json 을 드래그하거나 [샘플 열기]를 누르세요', cv.width / 2, cv.height / 2);
     return;
   }
@@ -80,7 +81,7 @@ export function render2d() {
     const off = offs[wallDraw.roomId];
     if (off) {
       const [x, y] = toPx(wallDraw.x + off.x, wallDraw.z + off.z);
-      ctx.fillStyle = '#e9c46a';
+      ctx.fillStyle = '#b07d10';
       ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
     }
   }
@@ -132,7 +133,7 @@ function paintRoom(g, r, off, P, s, th, interactive) {
     for (const o of w.openings) { if (o.lo > cursor) pieces.push([cursor, o.lo]); cursor = Math.max(cursor, o.hi); }
     if (cursor < w.hi) pieces.push([cursor, w.hi]);
     if (!w.openings.length) { pieces.length = 0; pieces.push([w.lo, w.hi]); }
-    g.strokeStyle = selWall ? th.wallSel : (hovered ? '#e9c46a' : th.wall);
+    g.strokeStyle = selWall ? th.wallSel : (hovered ? '#d99a1b' : th.wall);
     g.lineWidth = t; g.lineCap = 'butt';
     for (const [a, b] of pieces) {
       g.beginPath();
@@ -365,8 +366,10 @@ function onDown(e) {
     state.sel = { kind: 'light', roomId: hit.r.id, lightId: hit.lightId };
     drag = { kind: 'pan', mx, my, px: view.px, py: view.py, moved: false };
   } else {
+    // 방 몸체 드래그 = 방 전체 이동 (세대 조립 — 다른 방 모서리에 자석 스냅)
+    pushHistory(hit.r);
     state.sel = { kind: 'room', roomId: hit.r.id };
-    drag = { kind: 'pan', mx, my, px: view.px, py: view.py, moved: false };
+    drag = { kind: 'room', r: hit.r, wx, wz, moved: false };
   }
   emit('select');
 }
@@ -405,6 +408,10 @@ function onMove(e) {
     const np = drag.wall.dir === 'z' ? lz : lx;     // 법선 방향으로 이동
     moveWall(drag.r, drag.key, np, true);
     render2d();
+  } else if (drag.kind === 'room') {
+    moveRoomBy(drag.r, wx - drag.wx, wz - drag.wz);
+    drag.wx = wx; drag.wz = wz;
+    render2d();
   }
 }
 
@@ -418,6 +425,10 @@ function onUp(e) {
       const hit = hitAt(...toWorld(mx, my));
       if (!hit) { state.sel = null; emit('select'); }
     }
+    return;
+  }
+  if (d.kind === 'room') {
+    if (d.moved) { snapRoomPos(d.r); emit('project'); }
     return;
   }
   if (d.kind === 'furn' && d.moved) {

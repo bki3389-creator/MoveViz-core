@@ -1,15 +1,15 @@
-/* PlanShot 미니BIM — 다크 스튜디오 테마 (iOS PSTheme 과 동일 계열: 시안 강조) */
+/* PlanShot 미니BIM — 화이트 테마 (시안 강조 유지) */
 :root {
-  --bg: #0e1116; --panel: #161b22; --card: #1d2430; --line: #2a3240;
-  --ink: #e6e3db; --sub: #8b94a3; --accent: #219ed9; --accent2: #2ec4a6;
-  --warn: #e9c46a; --danger: #d9534f;
+  --bg: #f2f4f7; --panel: #ffffff; --card: #f4f6f9; --line: #dfe4ea;
+  --ink: #1d2734; --sub: #687382; --accent: #157fbe; --accent2: #17967e;
+  --warn: #9a6b00; --danger: #c9302c;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--ink); font: 13px/1.5 -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif; overflow: hidden; }
 
 #topbar { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 12px;
-  background: var(--panel); border-bottom: 1px solid var(--line); }
+  background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: 0 1px 3px rgba(20,30,45,.05); }
 .brand { font-weight: 800; font-size: 16px; letter-spacing: .2px; }
 .brand span { color: var(--accent); }
 .brand em { font-style: normal; font-size: 11px; color: var(--sub); margin-left: 4px; }
@@ -21,7 +21,7 @@ body { background: var(--bg); color: var(--ink); font: 13px/1.5 -apple-system, '
 .btn:hover { border-color: var(--accent); }
 .btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .btn.ghost { background: transparent; }
-.btn.danger { background: rgba(217,83,79,.15); border-color: var(--danger); color: #f0a09e; width: 100%; margin-top: 8px; }
+.btn.danger { background: rgba(201,48,44,.08); border-color: var(--danger); color: var(--danger); width: 100%; margin-top: 8px; }
 
 #layout { display: grid; grid-template-columns: 240px 1fr 320px; height: calc(100% - 48px); }
 aside { background: var(--panel); overflow-y: auto; }
@@ -33,7 +33,7 @@ aside { background: var(--panel); overflow-y: auto; }
 /* 방 카드 */
 .room-card { position: relative; margin: 4px 8px; padding: 10px 12px; background: var(--card);
   border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
-.room-card.on { border-color: var(--accent); background: rgba(33,158,217,.10); }
+.room-card.on { border-color: var(--accent); background: rgba(21,127,190,.08); }
 .rc-top { display: flex; justify-content: space-between; align-items: baseline; }
 .rc-top span { font-size: 11px; color: var(--sub); }
 .rc-sub { font-size: 11px; color: var(--sub); margin-top: 2px; }
@@ -49,7 +49,7 @@ aside { background: var(--panel); overflow-y: auto; }
   border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .vtab { border: 1px solid var(--line); background: var(--card); color: var(--sub); padding: 6px 14px;
   border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; }
-.vtab.on { color: #fff; background: rgba(33,158,217,.2); border-color: var(--accent); }
+.vtab.on { color: #fff; background: var(--accent); border-color: var(--accent); }
 .vtab.small { padding: 5px 10px; font-size: 11px; }
 .mini { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px; font-size: 11px; }
 .hint { font-size: 11px; color: var(--warn); }
@@ -73,7 +73,7 @@ aside { background: var(--panel); overflow-y: auto; }
 
 /* 견적 */
 #estSummary { padding: 0 12px; }
-.est-sum { background: var(--card); border-radius: 10px; padding: 10px 12px; }
+.est-sum { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .est-sum > div { display: flex; justify-content: space-between; padding: 2px 0; font-size: 12px; }
 .est-sum .tot { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; font-size: 14px; }
 .est-sum .tot b { color: var(--accent); }

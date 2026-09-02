@@ -3,7 +3,7 @@
 import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore,
          selectedRoom, room, metricsOf, wallsOf, removeLight, undo,
          updateOpening, removeOpening, removeInnerWall, scaleRoom,
-         addFurniture, rotateFurniture, resizeFurniture, removeFurniture } from './state.js';
+         addFurniture, rotateFurniture, resizeFurniture, removeFurniture, arrangeRooms } from './state.js';
 import { init2D, render2d, renderRoomImage, cancelWallDraw } from './plan2d.js';
 import { init3D, rebuild3D, frameAll, clearHighlight } from './scene3d.js';
 import { renderEstimate, exportCSV, buildEstimate } from './estimate.js';
@@ -140,6 +140,7 @@ lightSel.onchange = () => { state.lightType = lightSel.value; syncToolbar(); };
 $('chkCeil').onchange = e => { state.showCeiling = e.target.checked; rebuild3D(); };
 $('chkFurn').onchange = e => { state.showFurniture = e.target.checked; rebuild3D(); render2d(); };
 $('btnFrame').onclick = () => frameAll();
+$('btnArrange').onclick = () => { if (confirm('방 배치를 일렬로 초기화할까요?')) { arrangeRooms(); frameAll(); } };
 
 function syncToolbar() {
   for (const [id, tool] of TOOLS2D) $(id).classList.toggle('on', (state.tool2d || 'select') === tool);

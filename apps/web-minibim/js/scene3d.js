@@ -19,8 +19,8 @@ export function init3D(el) {
   el.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0d1013);
-  scene.fog = new THREE.Fog(0x0d1013, 30, 90);
+  scene.background = new THREE.Color(0xeef1f5);
+  scene.fog = new THREE.Fog(0xeef1f5, 40, 110);
 
   camera = new THREE.PerspectiveCamera(52, 1, 0.05, 300);
   camera.position.set(7, 8, 11);
@@ -30,7 +30,7 @@ export function init3D(el) {
   controls.dampingFactor = 0.08;
   controls.maxPolarAngle = Math.PI * 0.495;
 
-  const hemi = new THREE.HemisphereLight(0xf2f4f8, 0x33393f, 0.75);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x8d949e, 0.9);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 0.65);
   sun.position.set(10, 16, 6);
@@ -40,7 +40,7 @@ export function init3D(el) {
   sun.shadow.camera.top = 20; sun.shadow.camera.bottom = -20;
   scene.add(sun);
 
-  const grid = new THREE.GridHelper(60, 60, 0x2a3038, 0x1a1f26);
+  const grid = new THREE.GridHelper(60, 60, 0xc6cdd6, 0xdde2e9);
   grid.position.y = -0.011;
   scene.add(grid);
 

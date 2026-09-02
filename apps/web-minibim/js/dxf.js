@@ -57,8 +57,8 @@ export function exportDXF() {
   P.rooms.forEach((r, ri) => {
     const bb = bboxOf(r.plan); if (!bb) return;
     const off = offs[r.id];
-    const X = x => off.x + x, Y = z => (bb.maxZ - z) - (bb.minZ < 0 ? 0 : 0);   // z 뒤집기(위=+y)
-    const Yf = z => bb.maxZ - z;
+    const X = x => off.x + x;
+    const Yf = z => -(off.z + z);   // 전역 z 뒤집기 — 조립 배치 그대로
     const m = metricsOf(r);
     const bd = r.plan.boundary || [];
     if (bd.length >= 3) {
