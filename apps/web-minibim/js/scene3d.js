@@ -37,6 +37,7 @@ export function init3D(el) {
   scene.add(hemi);
   window.__psHemi = hemi;
   const sun = new THREE.DirectionalLight(0xffffff, 0.65);
+  window.__psSun = sun;
   sun.position.set(10, 16, 6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -474,7 +475,9 @@ export function rebuild3D() {
   const offs = layoutOffsets();
 
   // 모드: 재료 확인(밝고 균일) vs 조명 효과(실광원·톤매핑)
-  if (window.__psHemi) window.__psHemi.intensity = state.lightFX ? 0.55 : 2.4;
+  // 조명효과 모드도 자연광 유지 — 0.55는 대낮 실내가 밤처럼 보였음("자연광이 안 들어옴")
+  if (window.__psHemi) window.__psHemi.intensity = state.lightFX ? 1.35 : 2.4;
+  if (window.__psSun) window.__psSun.intensity = state.lightFX ? 1.0 : 0.65;
   renderer.toneMapping = state.lightFX ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   renderer.toneMappingExposure = state.lightFX ? 1.15 : 1.0;
 

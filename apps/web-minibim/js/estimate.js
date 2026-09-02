@@ -190,7 +190,7 @@ export function exportCSV() {
   }
   flushRoom();
   lines.push(['합계', '', '', '', '', '', '재료비', Math.round(subM), '노무비', Math.round(subL), Math.round(sub), '']);
-  lines.push(['부가세 10%', '', '', '', '', '', '', '', '', '', Math.round(vat), '별도 표기']);
+  lines.push(['부가세 ' + (state.project?.vatPct ?? 10) + '%', '', '', '', '', '', '', '', '', '', Math.round(vat), '별도 표기']);
   lines.push(['총계(VAT 포함)', '', '', '', '', '', '', '', '', '', Math.round(total), '']);
   lines.push([]);
   if (laborDays?.length) {

@@ -390,7 +390,7 @@ export function removeLight(r, lightId) {
 // 좌표는 전부 방 로컬(m). 저장은 plan JSON을 직접 수정 — 프로젝트 저장 시 그대로 남는다.
 
 const SNAP = 0.05;   // 50mm 스냅
-export const snap = v => Math.round(v / SNAP) * SNAP;
+export const snap = v => Math.round(Math.round(v / SNAP) * SNAP * 1000) / 1000;   // mm 정밀도로 FP 잔재 제거(-6.300000000000001 방지)
 
 // 언두 — 편집 직전 방 스냅샷(딥카피). 드래그는 drag 시작 시 1회 push.
 const _hist = [];

@@ -88,7 +88,7 @@ export async function renderShot(root, camera, canvas, {
   scene.environmentRotation = new THREE.Euler();
   scene.backgroundRotation = new THREE.Euler();
   scene.backgroundIntensity = 0.7;
-  scene.environmentIntensity = 0.55;
+  scene.environmentIntensity = 0.75;   // 자연광(하늘) 기여 상향 — 닫힌 천장 보상
   const model = root.clone(true);
   // 렌더 전용 보정: 천장은 무조건 켜고 불투명하게(반투명 천장은 PT에서 빛이 새 우유빛),
   // 조명 픽스처 발광 강화(빛나는 광원으로). clone(true)는 재질 공유 — 수정 전 반드시 clone.
@@ -105,6 +105,14 @@ export async function renderShot(root, camera, canvas, {
     if (m2?.emissive && (m2.emissiveIntensity ?? 0) > 0.5 && m2.emissive.getHex() !== 0) {
       obj.material = m2.clone();
       obj.material.emissiveIntensity = 20;   // 패스트레이서에서 실제 광원 역할
+    }
+    // 유리(창·유리문·가구 유리)는 진짜 투과 재질로 — 천장이 닫힌 렌더에서 자연광은
+    // 창을 통해서만 들어오므로, 알파 유리로는 햇빛이 막힌다
+    else if (m2?.transparent && m2.opacity < 0.9 && (m2.roughness ?? 1) <= 0.2) {
+      obj.material = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff, transmission: 1, roughness: 0.04, ior: 1.5,
+        thickness: 0.006, metalness: 0,
+      });
     }
   });
   scene.add(model);
