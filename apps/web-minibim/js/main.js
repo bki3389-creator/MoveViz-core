@@ -9,7 +9,7 @@ import { init3D, rebuild3D, frameAll, clearHighlight } from './scene3d.js';
 import { renderEstimate, exportCSV, buildEstimate } from './estimate.js';
 import { exportDXF } from './dxf.js';
 import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS, FURN_ITEMS,
-         EXTRA_ITEMS, item, KRW, canonId, unitKo2 } from './catalog.js';
+         WORK_ITEMS, workItem, workGrade, roomTypeOf, item, KRW, canonId, unitKo2 } from './catalog.js';
 
 const $ = id => document.getElementById(id);
 const mmOf = m => Math.round(m * 1000);
@@ -352,20 +352,49 @@ function renderInspector() {
       emit('select');
     }));
 
-    // 추가 공사 (창호·문·주방·욕실·전기·설비)
-    const exSel = document.createElement('select');
-    let lastG = '';
-    for (const e2 of EXTRA_ITEMS) {
-      if (e2.group !== lastG) {
-        const og = document.createElement('optgroup'); og.label = e2.group; exSel.appendChild(og); lastG = e2.group;
-      }
+    // 공사 항목 (75항목 체계: 등급 3단 + 자동수량 + 연동)
+    const wSel = document.createElement('select');
+    let lastG2 = '', og2 = null;
+    for (const wi2 of WORK_ITEMS) {
+      if (wi2.group !== lastG2) { og2 = document.createElement('optgroup'); og2.label = wi2.group; wSel.appendChild(og2); lastG2 = wi2.group; }
       const op2 = document.createElement('option');
-      op2.value = e2.id;
-      op2.textContent = `${e2.name} (${KRW((e2.mat ?? 0) + (e2.lab ?? 0))}원/${unitKo2(e2.unit)})`;
-      exSel.lastChild.appendChild(op2);
+      op2.value = wi2.id; op2.textContent = wi2.name;
+      og2.appendChild(op2);
     }
-    el.appendChild(fld('추가 공사 (창호·문·주방·욕실…)', exSel));
-    el.appendChild(btn('+ 이 실에 추가', '', () => { addExtra(r, exSel.value, 1); }));
+    const gSel = document.createElement('select');
+    const qIn = document.createElement('input');
+    qIn.inputMode = 'decimal';
+    const syncWork = () => {
+      const wi2 = workItem(wSel.value); if (!wi2) return;
+      gSel.innerHTML = '';
+      wi2.grades.forEach((gr, i) => {
+        const op3 = document.createElement('option');
+        op3.value = i;
+        op3.textContent = `${gr.g} (${KRW(gr.mat + gr.lab)}원/${unitKo2(wi2.unit)})`;
+        gSel.appendChild(op3);
+      });
+      const aq = autoQtyFor(r, wi2);
+      qIn.value = aq ?? '';
+      qIn.placeholder = aq != null ? `자동 ${aq}` : '수량';
+    };
+    wSel.onchange = syncWork;
+    syncWork();
+    el.appendChild(fld('공사 항목 (창호·문·주방·욕실·설비…)', wSel));
+    el.appendChild(fld('등급/사양', gSel));
+    el.appendChild(fld(`수량 (${unitKo2(workItem(wSel.value)?.unit || 'ea')}) — 실측 자동 제안, 수정 가능`, qIn));
+    el.appendChild(btn('+ 이 실에 추가', '', () => {
+      const wi2 = workItem(wSel.value); if (!wi2) return;
+      const q = Number(String(qIn.value).replace(/[^\d.]/g, '')) || autoQtyFor(r, wi2) || 1;
+      addExtra(r, `${wi2.id}#${gSel.value || 0}`, q);
+      // 연동 항목 제안 (인덕션→전용선, 욕조철거→방수, 발코니확장→샷시)
+      for (const depId of wi2.deps || []) {
+        if ((r.extras || []).some(x => x.id.startsWith(depId + '#'))) continue;
+        const dep = workItem(depId); if (!dep) continue;
+        if (confirm(`연동 항목 '${dep.name}'도 함께 추가할까요?`)) {
+          addExtra(r, `${depId}#0`, autoQtyFor(r, dep) || 1);
+        }
+      }
+    }));
     if (r.extras?.length) {
       const list = document.createElement('div');
       for (const ex of r.extras) {
@@ -381,7 +410,7 @@ function renderInspector() {
         del2.onclick = () => setExtraQty(r, ex.id, 0);
         const lbl = document.createElement('span');
         lbl.style.flex = '1';
-        lbl.textContent = `${it2.name} (${unitKo2(it2.unit)})`;
+        lbl.textContent = `${it2.name} · ${it2.spec} (${unitKo2(it2.unit)})`;
         row2.append(lbl, qin, del2);
         list.appendChild(row2);
       }
@@ -403,6 +432,18 @@ function renderInspector() {
     el.appendChild(det);
     el.appendChild(tip('3D에서 벽·바닥·천장·가구·조명을 클릭하면 개별 편집. 2D 도구로 문/창/가벽 추가. Ctrl+Z 되돌리기.'));
   }
+}
+
+/// 공사 항목 자동 수량: 리서치 §0 실측 입력값 규칙 (A_floor/A_wall/P/개소/창면적)
+function autoQtyFor(r, wi) {
+  const rule = wi.auto;
+  if (!rule || rule.basis === 'manual') return null;
+  if (rule.roomType && roomTypeOf(r.name) !== rule.roomType) return null;
+  const m = metricsOf(r);
+  const v = { A_floor: m.area, A_wall: m.wallNet, P: m.per, P_door: m.baseboard,
+              N_door: m.doors, N_win: m.windows, A_win: m.winArea, room: 1 }[rule.basis];
+  if (v == null || v <= 0.001) return null;
+  return Math.round(v * (rule.factor || 1) * 100) / 100;
 }
 
 function tip(text) {

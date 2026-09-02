@@ -268,7 +268,7 @@
           {
             "type": "window",
             "wall_dir": "z",
-            "wall_pos": 4.2,
+            "wall_pos": 0,
             "span": [
               1.0,
               2.6
@@ -368,7 +368,13 @@
       "pos": {
         "x": 6.0,
         "z": 0
-      }
+      },
+      "extras": [
+        {
+          "id": "w_door_set#0",
+          "qty": 1
+        }
+      ]
     },
     {
       "id": "r3_smpl",
@@ -501,7 +507,17 @@
       "pos": {
         "x": 6.0,
         "z": 4.2
-      }
+      },
+      "extras": [
+        {
+          "id": "w_toilet#0",
+          "qty": 1
+        },
+        {
+          "id": "w_basin#0",
+          "qty": 1
+        }
+      ]
     }
   ]
 }

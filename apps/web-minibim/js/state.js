@@ -237,16 +237,17 @@ export function metricsOf(r) {
   const per = boundary ? polyPerimeter(boundary) : polys.reduce((s, p) => s + polyPerimeter(p), 0);
   const walls = wallsOf(r);
   const outer = walls.filter(w => !w.inner);
-  let doorW = 0, doors = 0, windows = 0, openA = 0;
+  let doorW = 0, doors = 0, windows = 0, openA = 0, winArea = 0;
   for (const w of outer) for (const o of w.openings) {
     openA += o.w * o.h;
     if (o.foreign) continue;   // 상대 방 소유 — 개수는 그쪽에서
-    if (o.type === 'door') { doors++; doorW += o.w; } else windows++;
+    if (o.type === 'door') { doors++; doorW += o.w; }
+    else { windows++; winArea += o.w * o.h; }
   }
   const wallNet = Math.max(0, per * H - openA);
   const bb = bboxOf(plan) || { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
   return {
-    area, per, H, wallNet, doors, windows, doorW,
+    area, per, H, wallNet, doors, windows, doorW, winArea,
     baseboard: Math.max(0, per - doorW), molding: per,
     w: bb.maxX - bb.minX, d: bb.maxZ - bb.minZ,
     pyeong: area * 0.3025,
