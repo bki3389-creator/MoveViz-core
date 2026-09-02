@@ -97,6 +97,11 @@ export const WORK_ITEMS = [
     grades: [ { g: '기본(세대 내)', mat: 100000, lab: 200000 }, { g: 'EV·복도 포함', mat: 180000, lab: 320000 } ] },
   { id: 'w_clean', group: '공통', name: '입주 청소', unit: 'm2', auto: { basis: 'A_floor' },
     grades: [ { g: '일반 입주청소', mat: 0, lab: 4000 }, { g: '준공청소(분진)', mat: 0, lab: 5500 } ] },
+  // 바닥 신설 밑작업 — 마감재 단가와 별도(철거→수평/하지→(난방)→마감 순)
+  { id: 'w_floorlevel', group: '바닥', name: '바닥 수평·하지 작업', unit: 'm2', auto: { basis: 'A_floor' },
+    grades: [ { g: '부분 그라인딩·퍼티', mat: 2000, lab: 6000 }, { g: '셀프레벨링(수평몰탈)', mat: 8000, lab: 12000 }, { g: '방통 몰탈 재타설 50mm', mat: 15000, lab: 25000 } ] },
+  { id: 'w_ondol', group: '바닥', name: '난방 배관(엑셀) 교체', unit: 'm2', auto: { basis: 'A_floor' }, deps: ['w_floorlevel'],
+    grades: [ { g: '배관 교체+방통 포함', mat: 30000, lab: 45000 } ] },
   // 창호 (WIN)
   { id: 'w_sash_bal', group: '창호', name: '발코니 샷시 교체', unit: 'm2', auto: { basis: 'A_win' },
     grades: [ { g: 'PVC 이중창 보급', mat: 250000, lab: 60000 }, { g: 'PVC 이중창 1군(LX·KCC)', mat: 400000, lab: 70000 }, { g: 'AL·시스템창', mat: 600000, lab: 90000 } ] },

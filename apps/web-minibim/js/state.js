@@ -518,6 +518,12 @@ export function moveWall(r, wallKey, newPos, silent) {
   return false;
 }
 
+/// 방 마감 표시색 — finishColors 오버라이드 우선, 없으면 카탈로그 색은 렌더러가 폴백
+export function finishColorOf(r, kind) {   // kind: 'floor'|'wall'|'ceil'
+  const v = r?.finishColors?.[kind];
+  return typeof v === 'number' ? v : null;
+}
+
 /// 조명 배치 그리드 — 실 크기에 따라 간격 자동(목표 1.1m), 셀 중심 정렬. L자는 경계 안쪽만.
 export function lightGridOf(r) {
   const bb = bboxOf(r.plan); if (!bb) return [];

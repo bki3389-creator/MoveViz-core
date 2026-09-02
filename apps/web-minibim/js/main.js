@@ -170,7 +170,7 @@ function interiorPose() {
   const px = cx - w2 * 0.36, pz = cz + d2 * 0.36;
   return { pos: [px, 1.4, pz], look: [cx + w2 * 0.12, 1.15, cz - d2 * 0.15], fov: 64 };
 }
-async function runRenderShot(sampleTarget = 96, w = 1120, h = 700, mode = 'auto') {
+async function runRenderShot(sampleTarget = 220, w = 1120, h = 700, mode = 'auto') {
   const { renderShot, stopRender, isRendering } = await import('./render.js');
   if (isRendering()) {           // 재클릭 먹통 방지: 이전 렌더를 중지시키고 이어서 시작
     stopRender();
@@ -459,9 +459,12 @@ function renderInspector() {
     nameIn.value = r.name;
     nameIn.onchange = () => { r.name = nameIn.value; emit('project'); };
     el.appendChild(fld('방 이름', nameIn));
-    el.appendChild(sel('바닥 마감', FINISH_FLOOR, canonId(r.floorFinish), v => { r.floorFinish = v; emit('project'); }));
-    el.appendChild(sel('벽 마감(기본)', FINISH_WALL, r.wallFinish, v => { r.wallFinish = v; emit('project'); }));
-    el.appendChild(sel('천장 마감', FINISH_CEIL, r.ceilFinish, v => { r.ceilFinish = v; emit('project'); }));
+    el.appendChild(withColor(sel('바닥 마감', FINISH_FLOOR, canonId(r.floorFinish),
+      v => { r.floorFinish = v; delete (r.finishColors || {}).floor; emit('project'); }), r, 'floor', () => item(canonId(r.floorFinish))?.color));
+    el.appendChild(withColor(sel('벽 마감(기본)', FINISH_WALL, r.wallFinish,
+      v => { r.wallFinish = v; delete (r.finishColors || {}).wall; emit('project'); }), r, 'wall', () => item(r.wallFinish)?.color));
+    el.appendChild(withColor(sel('천장 마감', FINISH_CEIL, r.ceilFinish,
+      v => { r.ceilFinish = v; delete (r.finishColors || {}).ceil; emit('project'); }), r, 'ceil', () => item(r.ceilFinish)?.color));
     el.appendChild(sel('천장 유형', CEIL_TYPES, r.ceilingType, v => { r.ceilingType = v; emit('project'); }));
 
     // 가구 추가
@@ -585,6 +588,26 @@ function autoQtyFor(r, wi) {
 /// 방 가구 총 무게(톤, 0.1 단위) — '가구 반출·폐기' 자동 수량
 function furnTons(r) {   // 폐기 지정 + 교체된 기존 가구만 반출 대상
   return Math.round(furnDisposalKg(r.plan.furniture) / 100) / 10;
+}
+
+/// 마감 select 옆 색 지정 피커 — 방별 finishColors 오버라이드 (마감 바꾸면 기본색으로)
+function withColor(fldEl, r, kind, baseColorFn) {
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;align-items:flex-end';
+  fldEl.style.flex = '1';
+  const cIn = document.createElement('input');
+  cIn.type = 'color';
+  cIn.title = '색 지정 (마감을 바꾸면 기본색으로 돌아갑니다)';
+  cIn.style.cssText = 'width:34px;height:30px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:2px;cursor:pointer';
+  const cur = (r.finishColors || {})[kind] ?? baseColorFn() ?? 0xdddddd;
+  cIn.value = '#' + cur.toString(16).padStart(6, '0');
+  cIn.onchange = () => {
+    if (!r.finishColors) r.finishColors = {};
+    r.finishColors[kind] = parseInt(cIn.value.slice(1), 16);
+    emit('project');
+  };
+  row.appendChild(fldEl); row.appendChild(cIn);
+  return row;
 }
 
 function priceKg(f, w, d) {

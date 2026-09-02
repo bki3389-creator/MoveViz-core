@@ -4,7 +4,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { OrbitControls } from '../vendor/addons/controls/OrbitControls.js';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
-import { state, emit, layoutOffsets, wallsOf, wallCuts, ceilH, addLight, room, doorGeom, lightGridOf } from './state.js';
+import { state, emit, layoutOffsets, wallsOf, wallCuts, ceilH, addLight, room, doorGeom, lightGridOf, finishColorOf } from './state.js';
 import { item, rateOf, FINISH_WALL } from './catalog.js';
 
 let renderer, scene, camera, controls, root, raycaster, container;
@@ -185,7 +185,8 @@ function shade(hex, k) {
   return `rgb(${r2 | 0},${g2 | 0},${b2 | 0})`;
 }
 function wallCanvas(finishId, baseColor) {
-  if (wallCvCache.has(finishId)) return wallCvCache.get(finishId);
+  const ck = finishId + ':' + baseColor;
+  if (wallCvCache.has(ck)) return wallCvCache.get(ck);
   const SPEC = {
     wl_tile:  { size: 1.2, kind: 'grid', tw: 0.3, th: 0.6 },
     wl_stone: { size: 2.4, kind: 'grid', tw: 1.2, th: 0.6 },
@@ -197,7 +198,7 @@ function wallCanvas(finishId, baseColor) {
     wl_paper: { size: 1.06, kind: 'weave' },
     wl_film:  { size: 1.2, kind: 'wood', plank: 0.3 },
   }[finishId];
-  if (!SPEC) { wallCvCache.set(finishId, null); return null; }
+  if (!SPEC) { wallCvCache.set(ck, null); return null; }
   const px = 512, c = document.createElement('canvas');
   c.width = c.height = px;
   const g = c.getContext('2d');
@@ -263,7 +264,7 @@ function wallCanvas(finishId, baseColor) {
     }
   }
   const out = { canvas: c, size: SPEC.size, stretchY: !!SPEC.stretchY };
-  wallCvCache.set(finishId, out);
+  wallCvCache.set(ck, out);
   return out;
 }
 
@@ -279,7 +280,8 @@ function wallMat(finishId, col, lenM, hM) {
 }
 
 function floorTexture(finishId, baseColor) {
-  if (texCache.has(finishId)) return texCache.get(finishId);
+  const fk = finishId + ':' + baseColor;
+  if (texCache.has(fk)) return texCache.get(fk);
   const SPEC = {
     fl_laminate: { size: 1.2, kind: 'wood', plank: 0.15 },
     fl_hardwood: { size: 1.2, kind: 'wood', plank: 0.12 },
@@ -287,7 +289,7 @@ function floorTexture(finishId, baseColor) {
     fl_tile300:  { size: 1.2, kind: 'tile', tile: 0.3 },
     fl_sheet:    { size: 1.2, kind: 'flat' },
   }[finishId];
-  if (!SPEC) { texCache.set(finishId, null); return null; }
+  if (!SPEC) { texCache.set(fk, null); return null; }
   const px = 512, c = document.createElement('canvas');
   c.width = c.height = px;
   const g = c.getContext('2d');
@@ -319,7 +321,7 @@ function floorTexture(finishId, baseColor) {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.repeat.set(1 / SPEC.size, 1 / SPEC.size);
   tex.anisotropy = 4;
-  texCache.set(finishId, tex);
+  texCache.set(fk, tex);
   return tex;
 }
 
@@ -492,10 +494,11 @@ function buildRoom(r, g, allowRealLight) {
   const shape = new THREE.Shape(bd.map(p => new THREE.Vector2(p[0], p[1])));
   const floorGeo = new THREE.ShapeGeometry(shape);
   floorGeo.rotateX(Math.PI / 2);
-  const ftex = floorTexture(r.floorFinish, finishColor(r.floorFinish));
+  const fcol = finishColorOf(r, 'floor') ?? finishColor(r.floorFinish);
+  const ftex = floorTexture(r.floorFinish, fcol);
   const fmat = ftex
     ? new THREE.MeshStandardMaterial({ color: 0xffffff, map: ftex, roughness: 0.82 })
-    : colorMat(finishColor(r.floorFinish), 0.85);
+    : colorMat(fcol, 0.85);
   const floor = new THREE.Mesh(floorGeo, fmat);
   floor.material.side = THREE.DoubleSide;
   floor.receiveShadow = true;
@@ -504,7 +507,7 @@ function buildRoom(r, g, allowRealLight) {
 
   // 천장
   const ceilGeo = floorGeo.clone();
-  const ceil = new THREE.Mesh(ceilGeo, colorMat(finishColor(r.ceilFinish, 0xf2efe9), 0.95));
+  const ceil = new THREE.Mesh(ceilGeo, colorMat(finishColorOf(r, 'ceil') ?? finishColor(r.ceilFinish, 0xf2efe9), 0.95));
   ceil.material.side = THREE.DoubleSide;
   ceil.material.transparent = true;
   ceil.material.opacity = 0.92;
@@ -561,7 +564,7 @@ function buildRoom(r, g, allowRealLight) {
   for (const w of wallsOf(r)) {
     const wallT = w.inner ? 0.1 : (w.isExterior ? 0.18 : 0.12);
     const finish = r.wallOverrides?.[w.key] || r.wallFinish;
-    const col = finishColor(finish, 0xdedad2);
+    const col = (!r.wallOverrides?.[w.key] ? finishColorOf(r, 'wall') : null) ?? finishColor(finish, 0xdedad2);
     const demo = r.wallTypes?.[w.key] === 'wt_demo';
     // ── CSG 벽 (Pascal Editor 방식 이식): 벽 = 코너까지 연장한 단일 박스 − 개구부/공유스팬 불리언
     const cutsAll = wallCuts(w);

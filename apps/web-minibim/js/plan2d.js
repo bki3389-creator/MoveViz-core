@@ -2,7 +2,7 @@
 // 인터랙션 수식은 아키톤 FloorPlanEditor에서 이식: 개구부 배치 = snap(t·L − w/2) + 양끝 클램프,
 // 슬라이드 = 내적 투영, 벽 드래그 = 법선 방향 이동. 인쇄용 방별 렌더(renderRoomImage) 포함.
 
-import { state, emit, layoutOffsets, wallsOf, wallSolidPieces, metricsOf, detectRegions, room, snap, doorGeom, splitWall, moveCorner,
+import { state, emit, layoutOffsets, wallsOf, wallSolidPieces, metricsOf, detectRegions, room, snap, doorGeom, splitWall, moveCorner, finishColorOf,
          addOpening, slideOpening, addInnerWall, moveWall, moveFurniture, pushHistory,
          moveRoomBy, snapRoomPos } from './state.js';
 import { item } from './catalog.js';
@@ -138,7 +138,8 @@ function paintRoom(g, r, off, P, s, th, interactive) {
     bd.forEach((p, i) => { const [x, y] = P(p[0], p[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); });
     g.closePath();
     const ff = item(r.floorFinish);
-    g.fillStyle = ff?.color != null ? hexA(ff.color, 0.28) : th.fill;
+    const fcol = finishColorOf(r, 'floor') ?? ff?.color;
+    g.fillStyle = fcol != null ? hexA(fcol, 0.28) : th.fill;
     g.fill();
     // 바닥 마감 해칭 (클립 후 작도)
     if (s > 16 && ff) {
