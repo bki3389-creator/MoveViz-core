@@ -13,8 +13,9 @@ export function buildEstimate() {
   const rows = [];
   const P = state.project;
   if (!P) return { rows, sub: 0, vat: 0, total: 0 };
-  // 단가 우선순위: 현장별 조정(project.rates) > 내 단가표(전역) > 카탈로그 기본
-  const OV = { ...getBiz().myRates, ...(P.rates || {}) };
+  // 단가 우선순위: 현장별 조정(project.rates) > 내 단가표(전역) > 카탈로그 기본.
+  // 고객 링크 뷰에선 열람자의 내 단가표를 섞지 않는다 — 보낸 견적 그대로(감사 확정)
+  const OV = state.customerView ? { ...(P.rates || {}) } : { ...getBiz().myRates, ...(P.rates || {}) };
 
   for (const r of P.rooms) {
     const m = metricsOf(r);
@@ -88,7 +89,8 @@ export function buildEstimate() {
   }
 
   // 이윤·일반관리비 — 사업자 설정 %(견적 관례상 소계 전 별도 행). 노무 품 환산 오염 방지 위해 amountM 측.
-  const mp = Number(getBiz().marginPct) || 0;
+  // 고객 링크는 발송 시 project.marginPct로 구워져 옴 — 프로젝트 값이 열람자 설정보다 우선
+  const mp = Number(P.marginPct ?? (state.customerView ? 0 : getBiz().marginPct)) || 0;
   if (mp > 0 && rows.length) {
     const base = rows.reduce((s, x) => s + x.amount, 0);
     const mAmt = base * mp / 100;
@@ -104,8 +106,8 @@ export function buildEstimate() {
   // 노무 품(인·일) 환산 — 직종별 노무비 합계 ÷ 일당. 1품 미만 공종은 실제 일당 청구 가능성 경고.
   const crews = {};
   for (const x of rows) {
-    const c = crewOf(x.id);
-    if (!c || x.amountL <= 0) continue;
+    if (x.amountL <= 0) continue;
+    const c = crewOf(x.id) || '기타';   // 미등록 공종(욕실 패키지 등)도 일정·품에서 빠뜨리지 않는다(감사 확정)
     crews[c] = (crews[c] || 0) + x.amountL;
   }
   const laborDays = Object.entries(crews).map(([c, won]) => ({
@@ -170,7 +172,7 @@ export function renderProExtras(elOrder, elSched) {
 }
 
 // ── 내 집 모드 요약 — buildEstimate() 재활용, 방별 합계 + 자재등급 범위 ──
-const esc2 = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const esc2 = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const KRWman = v => KRW(Math.round(v / 10000) * 10000);   // 만원 라운딩 — 소비자에게 1원 단위는 소음
 
 /// 범위 근거: 인건비·부가세율 고정, 자재비만 등급폭 −10%~+25%로 흔든 보수적 근사
@@ -183,9 +185,12 @@ export function buildEstimateHome() {
     cur.amount += x.amount;
   }
   const vatK = 1 + (state.project?.vatPct ?? 10) / 100;
+  // 자재비만 등급폭으로 흔든다 — 이윤행(amountM 측)은 고정 상수로 제외(이중 스윙 방지)
+  const mAmt = est.rows.find(x => x.id === 'biz_margin')?.amount || 0;
+  const matBase = est.subM - mAmt;
   return { ...est, perRoom,
-           low: (est.subL + est.subM * 0.90) * vatK,
-           high: (est.subL + est.subM * 1.25) * vatK };
+           low: (est.subL + matBase * 0.90 + mAmt) * vatK,
+           high: (est.subL + matBase * 1.25 + mAmt) * vatK };
 }
 
 export function renderEstimateHome(elSummary) {
@@ -224,12 +229,16 @@ export function renderEstimate(elSummary, elTable) {
   let lastRoom = '';
   for (const x of rows) {
     const q = x.unit === 'ea' ? String(Math.round(x.qty)) : x.qty.toFixed(1);
+    // XSS 방어: roomName·name 등은 고객 링크 페이로드에서 올 수 있는 사용자 데이터 — 전부 이스케이프(감사 확정)
+    const rateCells = x.id === 'biz_margin'
+      ? `<td class="r">—</td><td class="r">—</td>`   // 이윤행은 % 설정으로만 조정 — 입력칸 없음
+      : `<td class="r"><input class="rate-in" data-id="${esc2(x.id)}" data-kind="m" value="${KRW(x.m)}" size="7"></td>
+         <td class="r"><input class="rate-in" data-id="${esc2(x.id)}" data-kind="l" value="${KRW(x.l)}" size="7"></td>`;
     html += `<tr>
-      <td>${x.roomName !== lastRoom ? x.roomName : ''}</td>
-      <td title="${x.cat} · ${x.spec}">${x.name}</td><td>${unitKo(x.unit)}</td>
+      <td>${x.roomName !== lastRoom ? esc2(x.roomName) : ''}</td>
+      <td title="${esc2(x.cat)} · ${esc2(x.spec)}">${esc2(x.name)}</td><td>${unitKo(x.unit)}</td>
       <td class="r">${q}</td>
-      <td class="r"><input class="rate-in" data-id="${x.id}" data-kind="m" value="${KRW(x.m)}" size="7"></td>
-      <td class="r"><input class="rate-in" data-id="${x.id}" data-kind="l" value="${KRW(x.l)}" size="7"></td>
+      ${rateCells}
       <td class="r">${KRW(Math.round(x.amount))}</td></tr>`;
     lastRoom = x.roomName;
   }
@@ -251,6 +260,7 @@ export function renderEstimate(elSummary, elTable) {
       const v = Number(String(inp.value).replace(/[^\d]/g, ''));
       if (isNaN(v)) return;
       const id = inp.dataset.id, kind = inp.dataset.kind;
+      if (id === 'biz_margin') return;   // 이윤행 조정은 ⚙ 설정의 %로만
       // 반대편 값은 화면의 짝 입력칸에서 읽는다 — 'furn:' 등 카탈로그 밖 id도 안전
       const other = elTable.querySelector(`.rate-in[data-id="${(window.CSS && CSS.escape) ? CSS.escape(id) : id}"][data-kind="${kind === 'm' ? 'l' : 'm'}"]`);
       const ov2 = Number(String(other?.value ?? '').replace(/[^\d]/g, '')) || 0;

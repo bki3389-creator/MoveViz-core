@@ -354,7 +354,10 @@ export function saveProjectFile() {
 }
 
 const LS_KEY = 'minibim.project';
-export function autosave() { try { localStorage.setItem(LS_KEY, JSON.stringify(state.project)); } catch {} }
+export function autosave() {
+  if (state.noAutosave) return;   // 고객 링크 뷰 — 부팅 중 예약된 타이머까지 이중 차단
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state.project)); } catch {}
+}
 export function restore() {
   try {
     const t = localStorage.getItem(LS_KEY);

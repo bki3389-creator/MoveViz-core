@@ -78,6 +78,45 @@ A(parsed && parsed.biz.name === '테스트인테리어', '사업자명 왕복');
 A(JSON.stringify(parsed.p) === JSON.stringify(st.state.project), '프로젝트 왕복 무손실');
 A(await share.parseShareHash('#r=%%%broken') === null, '손상 링크 → null(크래시 없음)');
 
+// 7) [감사수정] 발송 시 이윤·내단가 굽기 — 고객 화면 총액 = 프로 총액
+localStorage.setItem('planshot_biz', JSON.stringify({ marginPct: 15, myRates: { wl_silk: { m: 9000, l: 9000 } } }));
+biz._resetBizCache();
+const proTotal = est.buildEstimate().total;
+const baked = JSON.parse(JSON.stringify(st.state.project));
+baked.rates = { ...biz.getBiz().myRates, ...(baked.rates || {}) };
+baked.marginPct = 15;
+const link2 = await share.makeShareLink(baked, biz.getBiz(), 'https://x.test/');
+const got = await share.parseShareHash(link2.slice(link2.indexOf('#')));
+localStorage.removeItem('planshot_biz'); biz._resetBizCache();          // 고객 브라우저 = 빈 biz
+st.loadJSONText(JSON.stringify(got.p), 'cust');
+st.state.customerView = true;
+const custTotal = est.buildEstimate().total;
+A(near(custTotal, proTotal, 1), `고객 총액=프로 총액: ${custTotal} vs ${proTotal}`);
+
+// 8) [감사수정] 고객 화면에서 열람자 내 단가표 무시
+localStorage.setItem('planshot_biz', JSON.stringify({ myRates: { wl_silk: { m: 1, l: 1 } } }));
+biz._resetBizCache();
+A(near(est.buildEstimate().total, proTotal, 1), '열람자 내단가가 고객 견적을 오염시키지 않음');
+st.state.customerView = false;
+localStorage.removeItem('planshot_biz'); biz._resetBizCache();
+st.loadJSONText(readFileSync(base + 'sample/sample_apt3.json', 'utf-8'), 'apt3');
+
+// 9) [감사수정] 미등록 공종도 일정 '기타'로 집계
+const t0 = est.buildSchedule().total;
+st.state.project.rooms[2].extras.push({ id: 'w_bath_pkg#1', qty: 1 });
+const t1 = est.buildSchedule().total;
+A(t1 > t0, `욕실 패키지 추가로 일정 증가: ${t0} → ${t1}`);
+st.state.project.rooms[2].extras.pop();
+
+// 10) [감사수정] home 범위에서 이윤행은 고정 상수(스윙 제외)
+st.state.project.marginPct = 10;
+const eh = est.buildEstimateHome();
+const mrow2 = eh.rows.find(x => x.id === 'biz_margin');
+const matB = eh.subM - mrow2.amount;
+const vatK2 = 1.1;
+A(near(eh.high - eh.low, matB * 0.35 * vatK2, 1), '스윙 폭 = 자재비(이윤 제외)×0.35');
+delete st.state.project.marginPct;
+
 // 뒷정리 — 다른 테스트에 전역 오염 방지
 localStorage.removeItem('planshot_biz');
 biz._resetBizCache();

@@ -20,6 +20,10 @@ import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS,
 const $ = id => document.getElementById(id);
 const mmOf = m => Math.round(m * 1000);
 const MODE_DECIDED = initMode();   // body 모드 클래스는 첫 렌더 전에 확정
+let sharedBiz = null;              // 고객 링크로 들어온 경우: 보낸 업체 {name, phone}
+// 고객 링크(#r=)는 부팅 '동기 구간'부터 자동저장·뷰어 단가 차단 — async 파싱을 기다리면
+// restore→emit이 이미 400ms 타이머를 예약해 열람자 프로젝트를 덮는다(감사 확정 레이스)
+if (location.hash.startsWith('#r=')) { state.noAutosave = true; state.customerView = true; }
 
 // ── 초기화 ──────────────────────────────────────
 init2D($('cv2d'));
@@ -52,7 +56,13 @@ rebuild3D(); frameAll(); emit('init');
   const q = new URLSearchParams(location.search);
   // 고객 링크(#r=) — 읽기전용 '고객 화면': 내 집 모드 강제 + 편집·저장 봉인 + 자동저장 차단
   const shared = await parseShareHash();
+  if (!shared && location.hash.startsWith('#r=')) {
+    // 손상·절단된 링크 — 무통보로 샘플이 뜨면 업자 리포트로 오인한다(감사 확정)
+    state.noAutosave = false; state.customerView = false;
+    alert('리포트 링크가 손상된 것 같습니다.\n보낸 분께 링크를 다시 요청해 주세요.');
+  }
   if (shared) {
+    sharedBiz = shared.biz || null;                 // 인쇄 헤더에 보낸 업체 표기용
     state.noAutosave = true;                        // 보는 사람의 자기 프로젝트를 덮지 않는다
     document.body.classList.add('customer');
     setMode('home', { persist: false, silent: true });
@@ -90,6 +100,8 @@ rebuild3D(); frameAll(); emit('init');
 /// 비어 있을 때만 모드 맞춤 샘플 로드 + 온보딩 토스트
 async function loadStarterSample() {
   if (state.project?.rooms?.length) return;
+  // 사용자가 이름 붙인 빈 현장(새 현장 후 현장명 입력)은 샘플로 덮지 않는다(감사 확정)
+  if (state.project?.name && state.project.name !== '새 현장') return;
   try {
     const file = getMode() === 'pro' ? 'sample/sample_apt3.json' : 'sample/sample_studio.json';
     const res = await fetch('./' + file);
@@ -129,7 +141,13 @@ $('btnPrint').onclick = () => window.print();
 // ── 고객 보내기 — 프로젝트를 읽기전용 링크로 (클립보드 + 모바일 공유시트) ──
 $('btnShare').onclick = async () => {
   if (!(state.project?.rooms?.length)) return alert('보낼 방이 없습니다');
-  const link = await makeShareLink(state.project, getBiz());
+  // 발송 시점의 '유효 견적'을 구워 넣는다 — 내 단가표·이윤율은 열람자 localStorage에 없으므로
+  // 링크에 담지 않으면 고객이 더 싼 총액을 보게 된다(감사 확정)
+  const baked = JSON.parse(JSON.stringify(state.project));
+  baked.rates = { ...getBiz().myRates, ...(baked.rates || {}) };
+  const mp = Number(getBiz().marginPct) || 0;
+  if (mp > 0) baked.marginPct = mp;
+  const link = await makeShareLink(baked, getBiz());
   if (!link) return alert('프로젝트가 너무 커서 링크로 담을 수 없습니다 — [프로젝트 저장] 파일을 전달하세요');
   try {
     await navigator.clipboard.writeText(link);
@@ -208,6 +226,10 @@ window.addEventListener('beforeprint', () => {
       <div class="pdoc">견 적 서<br><small>${dstr} · 견적 유효기간 14일</small></div>
     </div>
     <h2>${esc(name)}</h2>`;
+  } else if (sharedBiz?.name) {
+    // 고객 링크 뷰 인쇄 — 보낸 업체명 표기
+    html += `<h2>${esc(name)} — 우리 집 리포트</h2>`;
+    html += `<p class="pmeta">시공 문의: ${esc(sharedBiz.name)}${sharedBiz.phone ? ' · ' + esc(sharedBiz.phone) : ''} · ${dstr}</p>`;
   } else {
     html += `<h2>${esc(name)} — 실측 도면 · 개략 견적</h2>`;
     html += `<p class="pmeta">${esc(P?.company || 'PlanShot')} · ${dstr} · iPhone LiDAR 실측</p>`;
@@ -397,6 +419,12 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && overlayClosable()) closeModeOverlay();
     return;
   }
+  if (!$('bizModal').hidden) {   // 사업자 프로필 모달 위 — Esc 닫기, 나머지 전역키 차단(감사 확정)
+    if (e.key === 'Escape') { e.preventDefault(); $('bizModal').hidden = true; }
+    return;
+  }
+  if (document.body.classList.contains('customer')
+      && !['F2', 'F3', 'F4', 'Escape'].includes(e.key)) return;   // 고객 화면: 보기 키만
   if (e.key === 'F2') { e.preventDefault(); setTab('2d'); return; }
   if (e.key === 'F3') { e.preventDefault(); setTab('3d'); return; }
   if (e.key === 'F4') { e.preventDefault(); $('btnWalk').click(); return; }   // 걷기 토글
@@ -438,6 +466,7 @@ document.addEventListener('keydown', e => {
   if (k === 's') { state.tool2d = 'split'; setTab('2d'); syncToolbar(); }
 });
 function deleteSelected() {
+  if (document.body.classList.contains('customer')) return;   // 고객 화면 — 삭제 봉인
   const s = state.sel; if (!s) return;
   const r = room(s.roomId); if (!r) return;
   clearHighlight();
