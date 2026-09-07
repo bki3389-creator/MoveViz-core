@@ -2,7 +2,9 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#ffffff">
 <title>PlanShot 미니BIM — 실측 → 3D → 견적</title>
 <link rel="stylesheet" href="./css/style.css">
 <script type="importmap">
@@ -19,25 +21,31 @@
 <header id="topbar">
   <div class="brand">Plan<span>Shot</span> <em>미니BIM v5</em></div>
   <input id="projName" placeholder="현장명" />
+  <button id="modeSwitch" class="btn ghost" title="모드 바꾸기">🏠 내 집 모드</button>
   <div class="spacer"></div>
   <button id="btnNew" class="btn ghost">새 현장</button>
-  <button id="btnSample" class="btn ghost">샘플 열기</button>
-  <button id="btnOpen" class="btn ghost">JSON 열기</button>
+  <button id="btnSample" class="btn ghost pro-only">샘플 열기</button>
+  <button id="btnOpen" class="btn ghost"><span class="pro-only">JSON 열기</span><span class="home-only">스캔 파일 열기</span></button>
   <input type="file" id="fileIn" accept=".json" multiple hidden>
   <button id="btnSave" class="btn ghost">프로젝트 저장</button>
-  <button id="btnDXF" class="btn ghost">DXF</button>
-  <button id="btnCSV" class="btn accent">견적 CSV</button>
-  <button id="btnPrint" class="btn accent">인쇄</button>
+  <button id="btnDXF" class="btn ghost pro-only">DXF</button>
+  <button id="btnCSV" class="btn accent pro-only">견적 CSV</button>
+  <button id="btnPrint" class="btn accent"><span class="pro-only">인쇄</span><span class="home-only">보고서 인쇄</span></button>
 </header>
 
 <div id="layout">
   <aside id="left">
     <div class="panel-title">방 (실측)</div>
     <div id="roomList"></div>
-    <button id="btnArrange" class="btn ghost" style="margin:6px 8px;width:calc(100% - 16px)">방 일렬 정렬(초기화)</button>
-    <div class="tip" style="margin:8px">
+    <button id="btnArrange" class="btn ghost pro-only" style="margin:6px 8px;width:calc(100% - 16px)">방 일렬 정렬(초기화)</button>
+    <div class="panel-title">샘플 갤러리</div>
+    <div id="sampleGallery"></div>
+    <div class="tip pro-only" style="margin:8px">
       iPhone PlanShot 앱에서 스캔 → 내 스캔의 <b>plan.json</b> 을 공유/에어드롭으로 받아 이 창에 드래그하면 방이 추가됩니다.
       방별 스캔은 좌표가 제각각이라, <b>2D에서 방을 드래그해 실제 세대처럼 조립</b>하세요(모서리 자석 스냅). 프로젝트 JSON을 열면 배치까지 복원됩니다.
+    </div>
+    <div class="tip home-only" style="margin:8px">
+      iPhone PlanShot으로 방을 스캔하고, <b>plan.json</b> 파일을 이 창에 끌어다 놓으면(또는 '스캔 파일 열기') 우리 집이 나타나요.
     </div>
   </aside>
 
@@ -46,10 +54,10 @@
       <button id="modeChip" class="vtab mode" title="F2 도면 · F3 3D · F4 걷기 — 클릭해도 전환">3D <span>F2=도면</span></button>
       <span class="tgroup">2D 편집</span>
       <button id="t2Select" class="vtab small on" title="선택·드래그 (가구 이동, 문/창 슬라이드, 벽 이동)">선택</button>
-      <button id="t2Door" class="vtab small" title="벽 클릭 = 문 900 추가">문+</button>
-      <button id="t2Window" class="vtab small" title="벽 클릭 = 창 1500 추가">창+</button>
-      <button id="t2Split" class="vtab small" title="벽 분할(S) — 벽 클릭: 점 2개 삽입 → 가운데 조각 드래그로 단 만들기">분할</button>
-      <button id="t2Wall" class="vtab small" title="두 점 클릭 = 가벽 그리기">가벽+</button>
+      <button id="t2Door" class="vtab small pro-only" title="벽 클릭 = 문 900 추가">문+</button>
+      <button id="t2Window" class="vtab small pro-only" title="벽 클릭 = 창 1500 추가">창+</button>
+      <button id="t2Split" class="vtab small pro-only" title="벽 분할(S) — 벽 클릭: 점 2개 삽입 → 가운데 조각 드래그로 단 만들기">분할</button>
+      <button id="t2Wall" class="vtab small pro-only" title="두 점 클릭 = 가벽 그리기">가벽+</button>
       <div class="spacer"></div>
       <span class="tgroup">3D 조명</span>
       <button id="modeSelect" class="vtab small on" title="클릭으로 바닥/벽/천장/조명 선택">선택</button>
@@ -68,29 +76,55 @@
   </main>
 
   <aside id="right">
-    <div class="panel-title">선택 · 유형/재료</div>
-    <div class="panel-title">AI 디자이너</div>
-    <div id="aiPanel">
-      <div id="aiShot" class="ai-shot" hidden><img id="aiShotImg" alt="시점 캡처"><button id="aiShotX" class="btn ghost">×</button></div>
-      <div id="aiLog" class="ai-log"><div class="ai-msg ai">걷기(🚶)로 원하는 자리에 서서 📍시점 캡처 → 원하는 분위기를 말해보세요. 제안을 원클릭으로 도면·견적에 적용합니다.</div></div>
-      <div class="ai-row">
-        <button id="aiCapture" class="btn ghost" title="현재 3D 시점(걷다 멈춘 화면)을 캡처해 대화에 첨부">📍 시점 캡처</button>
-        <button id="aiKey" class="btn ghost" title="Anthropic API 키 — 이 브라우저에만 저장">키 설정</button>
+    <section id="secAI">
+      <div class="panel-title">AI 디자이너</div>
+      <div id="aiPanel">
+        <div id="aiShot" class="ai-shot" hidden><img id="aiShotImg" alt="시점 캡처"><button id="aiShotX" class="btn ghost">×</button></div>
+        <div id="aiLog" class="ai-log"><div class="ai-msg ai">걷기(🚶)로 원하는 자리에 서서 📍시점 캡처 → 원하는 분위기를 말해보세요. 제안을 원클릭으로 도면·견적에 적용합니다.</div></div>
+        <div class="ai-row">
+          <button id="aiCapture" class="btn ghost" title="현재 3D 시점(걷다 멈춘 화면)을 캡처해 대화에 첨부">📍 시점 캡처</button>
+          <button id="aiKey" class="btn ghost" title="Anthropic API 키 — 이 브라우저에만 저장">키 설정</button>
+        </div>
+        <div class="ai-row">
+          <textarea id="aiInput" rows="2" placeholder="예: 이 시점을 우드+베이지 미니멀로, 간접등 위주로 바꿔줘"></textarea>
+          <button id="aiSend" class="btn accent">보내기</button>
+        </div>
       </div>
-      <div class="ai-row">
-        <textarea id="aiInput" rows="2" placeholder="예: 이 시점을 우드+베이지 미니멀로, 간접등 위주로 바꿔줘"></textarea>
-        <button id="aiSend" class="btn accent">보내기</button>
-      </div>
-    </div>
-    <div id="inspector"></div>
-    <div class="panel-title">견적 (실시간)</div>
-    <div id="estSummary"></div>
-    <details id="estDetail" open>
-      <summary>상세 내역</summary>
-      <div id="estTable"></div>
-    </details>
+    </section>
+    <section id="secInspect">
+      <div class="panel-title"><span class="pro-only">선택 · 유형/재료</span><span class="home-only">선택한 곳 꾸미기</span></div>
+      <div id="inspector"></div>
+    </section>
+    <section id="secEst">
+      <div class="panel-title"><span class="pro-only">견적 (실시간)</span><span class="home-only">예상 비용</span></div>
+      <div id="estSummary"></div>
+      <details id="estDetail" open>
+        <summary><span class="pro-only">상세 내역</span><span class="home-only">자세한 내역 보기</span></summary>
+        <div id="estTable"></div>
+      </details>
+    </section>
   </aside>
 </div>
+
+<div id="modeOverlay" hidden>
+  <div class="mo-box">
+    <div class="mo-title">Plan<span>Shot</span> — 어떻게 쓸까요?</div>
+    <div class="mo-cards">
+      <button class="mo-card" data-mode="home">
+        <div class="mo-emoji">🏠</div>
+        <div class="mo-name">내 집</div>
+        <div class="mo-desc">우리 집 3D로 보고, AI로 바꿔보고, 견적까지</div>
+      </button>
+      <button class="mo-card" data-mode="pro">
+        <div class="mo-emoji">🔧</div>
+        <div class="mo-name">프로</div>
+        <div class="mo-desc">실측→도면→물량→견적서, 한 번의 방문으로</div>
+      </button>
+    </div>
+    <div class="mo-foot">언제든 위쪽의 모드 버튼으로 바꿀 수 있어요</div>
+  </div>
+</div>
+<div id="toast" hidden></div>
 
 <div id="shotModal" hidden>
   <div class="shot-box">

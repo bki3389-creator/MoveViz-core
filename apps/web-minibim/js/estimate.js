@@ -108,6 +108,39 @@ export function buildEstimate() {
   return { rows, sub, subM, subL, vat, total: sub + vat, laborDays, demoTons };
 }
 
+// ── 내 집 모드 요약 — buildEstimate() 재활용, 방별 합계 + 자재등급 범위 ──
+const esc2 = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const KRWman = v => KRW(Math.round(v / 10000) * 10000);   // 만원 라운딩 — 소비자에게 1원 단위는 소음
+
+/// 범위 근거: 인건비·부가세율 고정, 자재비만 등급폭 −10%~+25%로 흔든 보수적 근사
+export function buildEstimateHome() {
+  const est = buildEstimate();
+  const perRoom = [];
+  let cur = null;
+  for (const x of est.rows) {   // rows는 방 순서 정렬
+    if (!cur || cur.name !== x.roomName) { cur = { name: x.roomName, amount: 0 }; perRoom.push(cur); }
+    cur.amount += x.amount;
+  }
+  const vatK = 1 + (state.project?.vatPct ?? 10) / 100;
+  return { ...est, perRoom,
+           low: (est.subL + est.subM * 0.90) * vatK,
+           high: (est.subL + est.subM * 1.25) * vatK };
+}
+
+export function renderEstimateHome(elSummary) {
+  const { perRoom, low, high } = buildEstimateHome();
+  if (!perRoom.length) {
+    elSummary.innerHTML = '<div class="est-sum"><div class="disc">방을 추가하면 예상 비용이 나와요</div></div>';
+    return;
+  }
+  elSummary.innerHTML = `
+    <div class="est-sum est-home">
+      <div class="tot"><span>총 예상 비용</span><b>${KRWman(low)} ~ ${KRWman(high)}원</b></div>
+      <div class="disc">자재 등급·현장 상황에 따라 달라져요 (세금 포함)</div>
+      ${perRoom.map(r => `<div><span>${esc2(r.name)}</span><b>${KRW(Math.round(r.amount))}원</b></div>`).join('')}
+    </div>`;
+}
+
 export function renderEstimate(elSummary, elTable) {
   const { rows, sub, subM, subL, vat, total, laborDays, demoTons } = buildEstimate();
   elSummary.innerHTML = `

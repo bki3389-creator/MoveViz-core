@@ -1,0 +1,18 @@
+# PlanShot AI 데모 프록시 — Cloudflare Worker 설정
+name = "planshot-ai-proxy"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# ── 레이트리밋용 KV (선택) ─────────────────────────────
+# 바인딩 이름은 반드시 RL (worker.js가 env.RL 로 조회).
+# 없으면 레이트리밋 없이 통과한다(로컬/초기 데모용).
+#
+# 생성:  npx wrangler kv namespace create RL
+# 출력된 id를 아래에 넣고 주석 해제:
+#
+# [[kv_namespaces]]
+# binding = "RL"
+# id = "<여기에_KV_NAMESPACE_ID>"
+
+# 시크릿(ANTHROPIC_API_KEY)은 이 파일에 쓰지 말 것 — 배포 후:
+#   npx wrangler secret put ANTHROPIC_API_KEY

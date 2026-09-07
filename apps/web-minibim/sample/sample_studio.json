@@ -1,0 +1,105 @@
+{
+ "version": 1,
+ "name": "신촌 원룸",
+ "company": "PlanShot",
+ "client": "김서연",
+ "vatPct": 10,
+ "rates": {},
+ "rooms": [
+  {
+   "id": "r1_studio",
+   "name": "원룸 주실",
+   "plan": {
+    "source": "sample",
+    "floor_y": 0,
+    "ceil_y": 2.3,
+    "boundary": [[0, 0], [5.2, 0], [5.2, 3.8], [0, 3.8]],
+    "xw": [
+     { "pos": 1.4, "segs": [[0, 1.3]], "presence": 1, "cls": "added" }
+    ],
+    "zw": [
+     { "pos": 1.3, "segs": [[0, 1.4]], "presence": 1, "cls": "added" }
+    ],
+    "openings": [
+     { "type": "door", "wall_dir": "z", "wall_pos": 0, "span": [0.3, 1.2], "width": 0.9, "height": 2.1 },
+     { "type": "door", "wall_dir": "x", "wall_pos": 1.4, "span": [0.25, 1.05], "width": 0.8, "height": 2.05, "dk": "slide", "dm": "glass" },
+     { "type": "window", "wall_dir": "z", "wall_pos": 3.8, "span": [2.2, 4.2], "width": 2.0, "height": 1.8 },
+     { "type": "window", "wall_dir": "x", "wall_pos": 0, "span": [2.0, 3.2], "width": 1.2, "height": 1.4 }
+    ],
+    "rooms": [
+     {
+      "id": 0,
+      "polygon": [[0, 0], [5.2, 0], [5.2, 3.8], [0, 3.8]],
+      "area_m2": 19.76,
+      "name": "원룸 주실"
+     }
+    ],
+    "furniture": [
+     { "obb": [[0.3, 1.7], [1.4, 1.7], [1.4, 3.7], [0.3, 3.7]], "category": "bed", "category_ko": "침대 SS", "yaw_deg": 0 },
+     { "obb": [[2.5, 3.1], [3.7, 3.1], [3.7, 3.7], [2.5, 3.7]], "category": "table", "category_ko": "책상 1200", "yaw_deg": 0 },
+     { "obb": [[1.7, 0.05], [2.9, 0.05], [2.9, 0.65], [1.7, 0.65]], "category": "cabinet", "category_ko": "옷장 1200", "yaw_deg": 0 },
+     { "obb": [[4.25, 0.05], [5.15, 0.05], [5.15, 0.85], [4.25, 0.85]], "category": "refrigerator", "category_ko": "냉장고", "yaw_deg": 0 }
+    ]
+   },
+   "floorFinish": "fl_sheet18",
+   "wallFinish": "wl_paper",
+   "ceilFinish": "cl_paper",
+   "wallOverrides": {},
+   "wallTypes": { "x0_0": "wt_stud", "z0_0": "wt_stud" },
+   "ceilingType": "ct_flat",
+   "lights": [
+    { "id": "sl1", "type": "lt_down3", "x": 2.2, "z": 1.1 },
+    { "id": "sl2", "type": "lt_down3", "x": 4.3, "z": 1.1 },
+    { "id": "sl3", "type": "lt_down3", "x": 2.2, "z": 2.9 },
+    { "id": "sl4", "type": "lt_down3", "x": 4.3, "z": 2.9 },
+    { "id": "sl5", "type": "lt_sensor", "x": 0.7, "z": 0.65 }
+   ],
+   "pos": { "x": 0, "z": 0 },
+   "extras": [
+    { "id": "w_middoor#1", "qty": 1 }
+   ]
+  },
+  {
+   "id": "r2_studio",
+   "name": "욕실",
+   "plan": {
+    "source": "sample",
+    "floor_y": 0,
+    "ceil_y": 2.2,
+    "boundary": [[0, 0], [1.8, 0], [1.8, 2.1], [0, 2.1]],
+    "xw": [],
+    "zw": [],
+    "openings": [
+     { "type": "door", "wall_dir": "x", "wall_pos": 0, "span": [0.6, 1.4], "width": 0.8, "height": 2.0 }
+    ],
+    "rooms": [
+     {
+      "id": 0,
+      "polygon": [[0, 0], [1.8, 0], [1.8, 2.1], [0, 2.1]],
+      "area_m2": 3.78,
+      "name": "욕실"
+     }
+    ],
+    "furniture": [
+     { "obb": [[1.15, 1.35], [1.55, 1.35], [1.55, 2.05], [1.15, 2.05]], "category": "toilet", "category_ko": "변기", "yaw_deg": 0 },
+     { "obb": [[0.2, 1.5], [0.8, 1.5], [0.8, 1.95], [0.2, 1.95]], "category": "sink", "category_ko": "세면대", "yaw_deg": 0 }
+    ]
+   },
+   "floorFinish": "fl_tile300",
+   "wallFinish": "wl_tile",
+   "ceilFinish": "cl_sgb",
+   "wallOverrides": {},
+   "wallTypes": {},
+   "ceilingType": "ct_keep",
+   "lights": [
+    { "id": "sb1", "type": "lt_down6", "x": 0.9, "z": 1.05 }
+   ],
+   "pos": { "x": 5.2, "z": 1.7 },
+   "extras": [
+    { "id": "w_toilet#0", "qty": 1 },
+    { "id": "w_basin#0", "qty": 1 },
+    { "id": "w_bathfaucet#0", "qty": 1 }
+   ]
+  }
+ ]
+}

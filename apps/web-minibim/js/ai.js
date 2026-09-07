@@ -7,6 +7,7 @@ import { state, emit, room, addLight, addExtra, addFurniture, lightGridOf, metri
 import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, LIGHTS, FURN_ITEMS,
          WORK_ITEMS, item } from './catalog.js';
 import { getSceneRefs, getWalkPose } from './scene3d.js';
+import { AI_PROXY_URL } from './config.js';
 
 const MODEL = 'claude-opus-5';
 let chat = [];            // Claude 대화 이력 (content 블록 그대로 — thinking 블록 포함 재전송)
@@ -71,7 +72,11 @@ const SYS = `너는 PlanShot의 AI 인테리어 디자이너다. 사용자가 �
 
 // ── API 호출 ─────────────────────────────────────
 export async function askDesigner(userText, imageDataUrl) {
-  if (!apiKey()) throw new Error('API 키가 없습니다 — AI 패널의 "키 설정"에 Anthropic API 키를 넣어주세요');
+  // 우선순위: ①개인 키(직접 호출) ②AI_PROXY_URL(데모 프록시 — 키 불요) ③안내 오류
+  const useProxy = !apiKey() && !!AI_PROXY_URL;
+  if (!apiKey() && !AI_PROXY_URL) {
+    throw new Error('API 키가 없습니다 — AI 패널의 "키 설정"에 Anthropic API 키를 넣어주세요');
+  }
   const content = [];
   if (imageDataUrl) {
     content.push({ type: 'image', source: {
@@ -82,17 +87,23 @@ export async function askDesigner(userText, imageDataUrl) {
   // 이력 상한: 오래된 턴은 통째로 제거(중간 편집 금지 — 캐시·thinking 규약)
   while (chat.length > 10) chat.splice(0, 2);
 
+  // 프록시 경유: 키를 워커가 서버측 주입 — x-api-key·browser-access 헤더 생략.
+  // version/beta 헤더는 패스스루(특히 beta는 body의 fallbacks와 짝 — 빠지면 400).
+  const url = useProxy ? AI_PROXY_URL + '/v1/messages' : 'https://api.anthropic.com/v1/messages';
+  const headers = {
+    'content-type': 'application/json',
+    'anthropic-version': '2023-06-01',
+    'anthropic-beta': 'server-side-fallback-2026-07-01',
+  };
+  if (!useProxy) {
+    headers['x-api-key'] = apiKey();
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  }
   let res;
   try {
-    res = await fetch('https://api.anthropic.com/v1/messages', {
+    res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey(),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        'anthropic-beta': 'server-side-fallback-2026-07-01',
-      },
+      headers,
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 4096,

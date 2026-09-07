@@ -7,7 +7,9 @@ import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore, ad
 import { init2D, render2d, renderRoomImage, cancelWallDraw } from './plan2d.js';
 import * as stateMod from './state.js';
 import { init3D, rebuild3D, frameAll, clearHighlight, getSceneRefs, enterWalk, exitWalk, isWalking, getWalkPose } from './scene3d.js';
-import { renderEstimate, exportCSV, buildEstimate } from './estimate.js';
+import { renderEstimate, renderEstimateHome, exportCSV, buildEstimate } from './estimate.js';
+import { initMode, getMode, openModeOverlay, wireModeOverlay, overlayOpen, overlayClosable,
+         closeModeOverlay, ezApply } from './mode.js';
 import { exportDXF } from './dxf.js';
 import * as ai from './ai.js';
 import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS, FURN_ITEMS, furnKgOf, furnDisposalKg, ratesOf,
@@ -15,6 +17,7 @@ import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS,
 
 const $ = id => document.getElementById(id);
 const mmOf = m => Math.round(m * 1000);
+const MODE_DECIDED = initMode();   // body 모드 클래스는 첫 렌더 전에 확정
 
 // ── 초기화 ──────────────────────────────────────
 init2D($('cv2d'));
@@ -31,6 +34,11 @@ on(what => {
   renderRooms();
   renderInspector();
   renderEstimate($('estSummary'), $('estTable'));
+  if (getMode() === 'home') {
+    renderEstimateHome($('estSummary'));   // 요약을 쉬운말 버전으로 덮어쓰기 (상세표·인쇄는 그대로)
+    ezApply($('inspector'));               // 표시 텍스트만 쉬운말 치환 — 렌더 직후 1회(재렌더마다 초기화됨)
+    ezApply($('estTable'));
+  }
   if (what === 'tool') syncToolbar();
 });
 rebuild3D(); frameAll(); emit('init');
@@ -53,7 +61,34 @@ rebuild3D(); frameAll(); emit('init');
   if (q.get('tab') === '2d' || q.get('tab') === '3d') setTab(q.get('tab'));
   if (q.has('rendershot')) setTimeout(() => runRenderShot(Number(q.get('rendershot')) || 24, 640, 400), 800);
   if (q.has('sample') || q.get('ceil') === '1') { rebuild3D(); emit('select'); }
+  // 온보딩: 프로젝트가 비어 있으면 모드에 맞는 샘플 자동 로드 (첫 방문은 모드 선택 후에)
+  if (!q.has('sample') && MODE_DECIDED) await loadStarterSample();
+  wireModeOverlay(m => { setTab(m === 'pro' ? '2d' : '3d'); loadStarterSample(); });
+  if (!MODE_DECIDED) openModeOverlay(false);   // 첫 방문 — 선택 강제(Esc 불가)
+  emit('mode');                                 // 모드별 초기 상태(상세 열림/힌트) 1회 적용
 })();
+
+/// 비어 있을 때만 모드 맞춤 샘플 로드 + 온보딩 토스트
+async function loadStarterSample() {
+  if (state.project?.rooms?.length) return;
+  try {
+    const file = getMode() === 'pro' ? 'sample/sample_apt3.json' : 'sample/sample_studio.json';
+    const res = await fetch('./' + file);
+    loadJSONText(await res.text(), file.split('/').pop());
+    frameAll();
+    toast('샘플 하우스입니다 — iPhone 스캔 plan.json을 열면 내 집이 됩니다', 3200);
+    if (getMode() === 'home') $('btnWalk').classList.add('pulse');
+  } catch {}
+}
+
+let _toastT = null;
+function toast(msg, ms = 3000) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => { t.hidden = true; }, ms);
+}
 
 // ── 헤더 ──────────────────────────────────────
 $('projName').addEventListener('change', e => { state.project.name = e.target.value; emit('meta'); });
@@ -144,6 +179,7 @@ $('chkFurn').onchange = e => { state.showFurniture = e.target.checked; rebuild3D
 $('btnFrame').onclick = () => frameAll();
 $('btnShot').onclick = () => runRenderShot();
 $('btnWalk').onclick = () => {
+  $('btnWalk').classList.remove('pulse');   // 온보딩 펄스 해제
   if (isWalking()) { exitWalk(); return; }
   setTab('3d');
   const r = selectedRoom();
@@ -217,6 +253,24 @@ async function runRenderShot(sampleTarget = 220, w = 1120, h = 700, mode = 'auto
 }
 $('btnArrange').onclick = () => { if (confirm('방 배치를 일렬로 초기화할까요?')) { arrangeRooms(); frameAll(); } };
 
+// ── 샘플 갤러리 (좌측) ─────────────────────────────
+const SAMPLE_GALLERY = [
+  { file: 'sample/sample_project.json', label: '3룸 데모', desc: '거실·침실·욕실 — L자 거실, 간접등 박스' },
+  { file: 'sample/sample_studio.json', label: '신촌 원룸', desc: '원룸+욕실 — 현관 가벽·미닫이 유리문 (내 집 모드용)' },
+  { file: 'sample/sample_apt3.json', label: '목동 아파트 24평', desc: '5실 조립 세대 — 우물천장·간접등, 실별 견적 (프로용)' },
+];
+$('sampleGallery').innerHTML = SAMPLE_GALLERY.map((s, i) =>
+  `<button class="sg-btn" data-i="${i}"><b>${s.label}</b><span>${s.desc}</span></button>`).join('');
+$('sampleGallery').querySelectorAll('.sg-btn').forEach(b => b.onclick = async () => {
+  const s = SAMPLE_GALLERY[+b.dataset.i];
+  if (state.project?.rooms?.length && !confirm(`현재 내용을 "${s.label}" 샘플로 교체할까요?`)) return;
+  try {
+    const res = await fetch('./' + s.file);
+    loadJSONText(await res.text(), s.file.split('/').pop());
+    frameAll();
+  } catch { alert('샘플을 불러오지 못했습니다'); }
+});
+
 function syncToolbar() {
   for (const [id, tool] of TOOLS2D) $(id).classList.toggle('on', (state.tool2d || 'select') === tool);
   $('modeSelect').classList.toggle('on', state.mode === 'select');
@@ -233,13 +287,29 @@ function syncToolbar() {
   }
   $('lightHint').textContent = hint;
 }
-setTab('3d');
+setTab(getMode() === 'pro' ? '2d' : '3d');   // home=3D 체험 우선, pro=도면 우선. URL ?tab이 이후 덮음
+
+// 모드 전환 반응 — 견적 스왑은 위 렌더 훅이 담당(모든 emit에 재렌더)
+on(what => {
+  if (what !== 'mode') return;
+  $('estDetail').open = getMode() === 'pro';
+  $('projName').placeholder = getMode() === 'home' ? '우리 집 이름' : '현장명';
+  if (getMode() === 'home' && ['door', 'window', 'wall', 'split'].includes(state.tool2d)) {
+    state.tool2d = 'select'; cancelWallDraw();   // home에선 편집 도구 봉인 — 상태 정합
+  }
+  syncToolbar();
+});
+$('modeSwitch').onclick = () => openModeOverlay(true);   // 재표시 — 이땐 닫기 허용
 
 // ── 키보드 ──────────────────────────────────────
 document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;   // 입력 중 가드
   if (isWalking()) return;   // 걷기 중 — 이동 키는 씬이 처리, Esc는 자체 종료
+  if (overlayOpen()) {       // 모드 선택 오버레이 위 — 전역 단축키 차단
+    if (e.key === 'Escape' && overlayClosable()) closeModeOverlay();
+    return;
+  }
   if (e.key === 'F2') { e.preventDefault(); setTab('2d'); return; }
   if (e.key === 'F3') { e.preventDefault(); setTab('3d'); return; }
   if (e.key === 'F4') { e.preventDefault(); $('btnWalk').click(); return; }   // 걷기 토글
@@ -274,6 +344,7 @@ document.addEventListener('keydown', e => {
   }
   // 도구 단축키 (원본 미니빔과 동일: V 선택 · D 문 · Q 창 · W 가벽)
   if (k === 'v') { state.tool2d = 'select'; syncToolbar(); }
+  if (getMode() === 'home') return;   // home: 편집 도구 숨김과 정합 — 단축키 뒷문 봉쇄
   if (k === 'd') { state.tool2d = 'door'; setTab('2d'); syncToolbar(); }
   if (k === 'q') { state.tool2d = 'window'; setTab('2d'); syncToolbar(); }
   if (k === 'w') { state.tool2d = 'wall'; cancelWallDraw(); setTab('2d'); syncToolbar(); }
