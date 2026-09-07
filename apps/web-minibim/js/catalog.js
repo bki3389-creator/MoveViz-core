@@ -335,3 +335,35 @@ export function furnDisposalKg(furniture) {
   }
   return kg;
 }
+
+// ── 발주 포장 단위 — cap: 1포장당 시공량(㎡ 또는 m), loss: 표준 로스율 ──
+// 물량(견적)을 실제 발주 수량으로 변환: 발주 = ceil(소요 × (1+loss) / cap)
+export const ORDER_PACKS = {
+  wl_silk:     { pack: '롤', cap: 16.5, loss: 0.12, note: '광폭 1롤=5평' },
+  wl_paper:    { pack: '롤', cap: 16.5, loss: 0.10, note: '광폭합지 1롤=5평' },
+  wl_mural:    { pack: '폭', cap: 3.0,  loss: 0.15, note: '주문 제작 — 실측폭 확인' },
+  wl_paint:    { pack: '통(4L)', cap: 20, loss: 0.10, note: '2회 도포 기준' },
+  wl_venpaint: { pack: '통(4L)', cap: 16, loss: 0.10, note: '올퍼티+2회' },
+  wl_film:     { pack: '롤', cap: 50,  loss: 0.15, note: '폭1.22m×50m' },
+  wl_tile:     { pack: '박스', cap: 1.44, loss: 0.08, note: '300×600 8장' },
+  wl_brick:    { pack: '박스', cap: 1.0, loss: 0.08, note: '파벽돌 1㎡' },
+  cl_silk:     { pack: '롤', cap: 16.5, loss: 0.12 },
+  cl_paper:    { pack: '롤', cap: 16.5, loss: 0.10 },
+  cl_paint:    { pack: '통(4L)', cap: 20, loss: 0.10 },
+  fl_laminate: { pack: '박스', cap: 1.65, loss: 0.07, note: '0.5평/박스' },
+  fl_lamin12:  { pack: '박스', cap: 1.86, loss: 0.07 },
+  fl_ondol:    { pack: '박스', cap: 1.65, loss: 0.07 },
+  fl_hardwood: { pack: '박스', cap: 1.21, loss: 0.10 },
+  fl_herring:  { pack: '박스', cap: 1.65, loss: 0.12, note: '헤링본 로스 큼' },
+  fl_sheet18:  { pack: 'm(폭1.8m)', cap: 1.8, loss: 0.05, note: '재단 m 기준' },
+  fl_sheet45:  { pack: 'm(폭1.8m)', cap: 1.8, loss: 0.05 },
+  fl_decotile: { pack: '박스', cap: 3.34, loss: 0.08, note: '450각 16장' },
+  fl_tile600:  { pack: '박스', cap: 1.44, loss: 0.08, note: '600각 4장' },
+  fl_tile300:  { pack: '박스', cap: 1.35, loss: 0.10, note: '300각 15장' },
+  fl_polish:   { pack: '박스', cap: 1.92, loss: 0.08, note: '800각 3장' },
+  tr_base:     { pack: '본(2.4m)', cap: 2.4, loss: 0.05 },
+  tr_mold:     { pack: '본(2.4m)', cap: 2.4, loss: 0.05 },
+};
+
+// 표준 시공 순서 — 공정 일정 정렬용 (없는 직종은 뒤로)
+export const CREW_SEQ = ['철거·보통인부', '설비', '목공', '전기', '타일', '필름·내장', '도장', '도배', '마루', '기타'];

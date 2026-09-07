@@ -7,9 +7,11 @@ import { state, on, emit, newProject, loadJSONText, saveProjectFile, restore, ad
 import { init2D, render2d, renderRoomImage, cancelWallDraw } from './plan2d.js';
 import * as stateMod from './state.js';
 import { init3D, rebuild3D, frameAll, clearHighlight, getSceneRefs, enterWalk, exitWalk, isWalking, getWalkPose } from './scene3d.js';
-import { renderEstimate, renderEstimateHome, exportCSV, buildEstimate } from './estimate.js';
-import { initMode, getMode, openModeOverlay, wireModeOverlay, overlayOpen, overlayClosable,
+import { renderEstimate, renderEstimateHome, renderProExtras, exportCSV, buildEstimate } from './estimate.js';
+import { initMode, getMode, setMode, openModeOverlay, wireModeOverlay, overlayOpen, overlayClosable,
          closeModeOverlay, ezApply } from './mode.js';
+import { getBiz, saveBiz } from './biz.js';
+import { makeShareLink, parseShareHash } from './share.js';
 import { exportDXF } from './dxf.js';
 import * as ai from './ai.js';
 import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS, FURN_ITEMS, furnKgOf, furnDisposalKg, ratesOf,
@@ -38,6 +40,8 @@ on(what => {
     renderEstimateHome($('estSummary'));   // 요약을 쉬운말 버전으로 덮어쓰기 (상세표·인쇄는 그대로)
     ezApply($('inspector'));               // 표시 텍스트만 쉬운말 치환 — 렌더 직후 1회(재렌더마다 초기화됨)
     ezApply($('estTable'));
+  } else {
+    renderProExtras($('orderTable'), $('schedTable'));   // 발주 수량 · 공정 일정
   }
   if (what === 'tool') syncToolbar();
 });
@@ -46,6 +50,21 @@ rebuild3D(); frameAll(); emit('init');
 // URL 파라미터 — 스크린샷/딥링크 검증용: ?sample(샘플 자동 로드) &tab=2d|3d &room=이름 &ceil=1
 (async () => {
   const q = new URLSearchParams(location.search);
+  // 고객 링크(#r=) — 읽기전용 '고객 화면': 내 집 모드 강제 + 편집·저장 봉인 + 자동저장 차단
+  const shared = await parseShareHash();
+  if (shared) {
+    state.noAutosave = true;                        // 보는 사람의 자기 프로젝트를 덮지 않는다
+    document.body.classList.add('customer');
+    setMode('home', { persist: false, silent: true });
+    try { loadJSONText(JSON.stringify(shared.p), '고객링크'); } catch {}
+    const bn = shared.biz?.name ? `${shared.biz.name}에서 보낸 ` : '';
+    const bp = shared.biz?.phone ? ` · ${shared.biz.phone}` : '';
+    $('custBanner').textContent = `📋 ${bn}우리 집 리포트${bp}`;
+    $('custBanner').hidden = false;
+    $('projName').readOnly = true;
+    frameAll();
+    setTab('3d');
+  }
   if (q.has('sample')) {
     try {
       const res = await fetch('./sample/sample_project.json');
@@ -62,9 +81,9 @@ rebuild3D(); frameAll(); emit('init');
   if (q.has('rendershot')) setTimeout(() => runRenderShot(Number(q.get('rendershot')) || 24, 640, 400), 800);
   if (q.has('sample') || q.get('ceil') === '1') { rebuild3D(); emit('select'); }
   // 온보딩: 프로젝트가 비어 있으면 모드에 맞는 샘플 자동 로드 (첫 방문은 모드 선택 후에)
-  if (!q.has('sample') && MODE_DECIDED) await loadStarterSample();
+  if (!q.has('sample') && !shared && MODE_DECIDED) await loadStarterSample();
   wireModeOverlay(m => { setTab(m === 'pro' ? '2d' : '3d'); loadStarterSample(); });
-  if (!MODE_DECIDED) openModeOverlay(false);   // 첫 방문 — 선택 강제(Esc 불가)
+  if (!MODE_DECIDED && !shared) openModeOverlay(false);   // 첫 방문 — 선택 강제(Esc 불가)
   emit('mode');                                 // 모드별 초기 상태(상세 열림/힌트) 1회 적용
 })();
 
@@ -106,6 +125,56 @@ $('btnSave').onclick = () => saveProjectFile();
 $('btnCSV').onclick = () => exportCSV();
 $('btnDXF').onclick = () => exportDXF();
 $('btnPrint').onclick = () => window.print();
+
+// ── 고객 보내기 — 프로젝트를 읽기전용 링크로 (클립보드 + 모바일 공유시트) ──
+$('btnShare').onclick = async () => {
+  if (!(state.project?.rooms?.length)) return alert('보낼 방이 없습니다');
+  const link = await makeShareLink(state.project, getBiz());
+  if (!link) return alert('프로젝트가 너무 커서 링크로 담을 수 없습니다 — [프로젝트 저장] 파일을 전달하세요');
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('고객 링크 복사됨 — 카톡·문자에 붙여넣으세요 (받는 사람은 열기만 하면 됩니다)', 3600);
+  } catch {
+    prompt('아래 링크를 복사하세요', link);
+  }
+  if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+    try { await navigator.share({ title: 'PlanShot 우리 집 리포트', url: link }); } catch {}
+  }
+};
+
+// ── 사업자 프로필 (전역 — 견적서·고객 링크·이윤율) ──
+const BZ_FIELDS = [['bzName', 'name'], ['bzPhone', 'phone'], ['bzNum', 'biznum'], ['bzAcct', 'acct'], ['bzMargin', 'marginPct']];
+let _bzLogo;   // 편집 중 로고 dataURL
+$('btnBiz').onclick = () => {
+  const b = getBiz();
+  for (const [el, k] of BZ_FIELDS) $(el).value = b[k] ?? '';
+  _bzLogo = b.logo || '';
+  $('bzLogoPrev').src = _bzLogo;
+  $('bzLogoPrev').style.display = _bzLogo ? '' : 'none';
+  $('bizModal').hidden = false;
+};
+$('bzClose').onclick = () => { $('bizModal').hidden = true; };
+$('bzLogo').addEventListener('change', e => {
+  const f = e.target.files?.[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    if (String(rd.result).length > 300000) return alert('로고가 너무 큽니다 — 200KB 이하 이미지를 쓰세요');
+    _bzLogo = rd.result;
+    $('bzLogoPrev').src = _bzLogo;
+    $('bzLogoPrev').style.display = '';
+  };
+  rd.readAsDataURL(f);
+});
+$('bzSave').onclick = () => {
+  const patch = {};
+  for (const [el, k] of BZ_FIELDS) patch[k] = $(el).value.trim();
+  patch.marginPct = Math.max(0, Math.min(30, Number(patch.marginPct) || 0));
+  patch.logo = _bzLogo;
+  saveBiz(patch);
+  $('bizModal').hidden = true;
+  emit('project');   // 이윤율 변경 → 견적 재계산
+  toast('저장됨 — 견적서·고객 링크에 반영됩니다');
+};
 $('btnNew').onclick = () => {
   if (!confirm('현재 프로젝트를 비우고 새로 시작할까요? (저장 안 한 내용은 사라짐)')) return;
   state.project = newProject($('projName').value || '새 현장');
@@ -126,9 +195,23 @@ window.addEventListener('beforeprint', () => {
   const pa = $('printArea');
   const P = state.project;
   const name = P?.name || '현장';
-  let html = `<h2>${esc(name)} — 실측 도면 · 개략 견적</h2>`;
   const df = new Date();
-  html += `<p class="pmeta">${esc(P?.company || 'PlanShot')} · ${df.getFullYear()}.${df.getMonth() + 1}.${df.getDate()} · iPhone LiDAR 실측</p>`;
+  const dstr = `${df.getFullYear()}.${df.getMonth() + 1}.${df.getDate()}`;
+  const biz = getBiz();
+  let html = '';
+  if (getMode() === 'pro' && (biz.name || biz.logo)) {
+    // 브랜딩 견적서 헤더 — 로고 · 상호/연락처/사업자/계좌 · 문서명
+    html += `<div class="pbiz">
+      <div class="pbiz-l">${biz.logo ? `<img class="plogo" src="${biz.logo}">` : ''}
+        <div><b>${esc(biz.name || '')}</b><br>${esc(biz.phone || '')}${biz.biznum ? ' · 사업자 ' + esc(biz.biznum) : ''}
+        ${biz.acct ? '<br>입금 ' + esc(biz.acct) : ''}</div></div>
+      <div class="pdoc">견 적 서<br><small>${dstr} · 견적 유효기간 14일</small></div>
+    </div>
+    <h2>${esc(name)}</h2>`;
+  } else {
+    html += `<h2>${esc(name)} — 실측 도면 · 개략 견적</h2>`;
+    html += `<p class="pmeta">${esc(P?.company || 'PlanShot')} · ${dstr} · iPhone LiDAR 실측</p>`;
+  }
   html += $('estSummary').innerHTML;
   for (const r of P?.rooms || []) {
     const img = renderRoomImage(r, 1000, 700);
@@ -139,6 +222,10 @@ window.addEventListener('beforeprint', () => {
       <img src="${img}"></div>`;
   }
   html += '<h3 class="pbreak">견적 상세</h3>' + $('estTable').innerHTML;
+  if (getMode() === 'pro') {
+    html += '<h3 class="pbreak">발주 수량 (로스 포함)</h3>' + $('orderTable').innerHTML;
+    html += '<h3>공정 일정 (예상)</h3>' + $('schedTable').innerHTML;
+  }
   html += `<p class="disc">개략 실측 — 시공 발주 전 정밀실측 필요 · PlanShot 미니BIM</p>`;
   pa.innerHTML = html;
 });

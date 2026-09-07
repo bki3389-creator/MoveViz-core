@@ -2,7 +2,9 @@
 // RhinoBIM `bq`(물량 CSV)의 웹판: 모델을 바꾸면 즉시 재계산된다.
 
 import { state, emit, metricsOf, wallsOf } from './state.js';
-import { item, ratesOf, KRW, CEIL_TYPES, canonId, crewOf, DAY_RATES, furnDisposalKg, furnPriceOf } from './catalog.js';
+import { item, ratesOf, KRW, CEIL_TYPES, canonId, crewOf, DAY_RATES, furnDisposalKg, furnPriceOf,
+         ORDER_PACKS, CREW_SEQ } from './catalog.js';
+import { getBiz, saveBiz, setMyRate } from './biz.js';
 
 const isWet = name => /욕실|화장실|발코니|베란다/.test(name || '');
 
@@ -11,13 +13,15 @@ export function buildEstimate() {
   const rows = [];
   const P = state.project;
   if (!P) return { rows, sub: 0, vat: 0, total: 0 };
+  // 단가 우선순위: 현장별 조정(project.rates) > 내 단가표(전역) > 카탈로그 기본
+  const OV = { ...getBiz().myRates, ...(P.rates || {}) };
 
   for (const r of P.rooms) {
     const m = metricsOf(r);
     const wallsAll = wallsOf(r);
     const push = (cat, id, qty, note = '') => {
       const it = item(id); if (!it || qty <= 0.001) return;
-      const { m: rm, l: rl } = ratesOf(id, P.rates);
+      const { m: rm, l: rl } = ratesOf(id, OV);
       rows.push({ roomName: r.name, cat, id, name: it.name, spec: it.spec, unit: it.unit,
                   qty, m: rm, l: rl, rate: rm + rl,
                   amountM: qty * rm, amountL: qty * rl, amount: qty * (rm + rl), note });
@@ -69,7 +73,7 @@ export function buildEstimate() {
       const pr = furnPriceOf(f);
       if (!pr) continue;
       const fid = 'furn:' + pr.name;
-      const ov = P.rates?.[fid];
+      const ov = OV[fid];
       const rm2 = ov?.m ?? pr.m, rl2 = ov?.l ?? pr.l;
       rows.push({ roomName: r.name, cat: '가구', id: fid, name: pr.name + ' 구입·설치',
                   spec: f.replaced ? '교체' : '신규', unit: 'ea', qty: 1,
@@ -81,6 +85,16 @@ export function buildEstimate() {
     const dispTon = dispKg > 0 ? Math.max(0.1, Math.round(dispKg / 100) / 10) : 0;   // 50kg 미만도 0.1t 최소 청구 — 반올림 소실 방지
     const manualOut = (r.extras || []).some(ex => String(ex.id).startsWith('w_furnout'));
     if (dispTon > 0 && !manualOut) push('철거·반출', 'w_furnout#1', dispTon, '자동(폐기·교체 가구)');
+  }
+
+  // 이윤·일반관리비 — 사업자 설정 %(견적 관례상 소계 전 별도 행). 노무 품 환산 오염 방지 위해 amountM 측.
+  const mp = Number(getBiz().marginPct) || 0;
+  if (mp > 0 && rows.length) {
+    const base = rows.reduce((s, x) => s + x.amount, 0);
+    const mAmt = base * mp / 100;
+    rows.push({ roomName: '공통', cat: '제경비', id: 'biz_margin', name: `이윤·일반관리비 ${mp}%`,
+                spec: '', unit: '식', qty: 1, m: mAmt, l: 0, rate: mAmt,
+                amountM: mAmt, amountL: 0, amount: mAmt, note: '⚙ 설정에서 % 조정' });
   }
 
   const sub = rows.reduce((s, x) => s + x.amount, 0);
@@ -106,6 +120,53 @@ export function buildEstimate() {
   }
   const demoTons = Math.round(demoKg / 100) / 10;
   return { rows, sub, subM, subL, vat, total: sub + vat, laborDays, demoTons };
+}
+
+// ── 발주 수량 — 물량 × (1+로스) ÷ 포장 단위, 올림 ─────────────
+export function buildOrderList() {
+  const { rows } = buildEstimate();
+  const agg = new Map();
+  for (const x of rows) {
+    const p = ORDER_PACKS[x.id];
+    if (!p) continue;
+    const e = agg.get(x.id) || { id: x.id, name: x.name, unit: item(x.id)?.unit || 'm2', need: 0, pack: p };
+    e.need += x.qty;
+    agg.set(x.id, e);
+  }
+  return [...agg.values()].map(e => ({
+    ...e,
+    buy: Math.ceil(e.need * (1 + e.pack.loss) / e.pack.cap),
+  }));
+}
+
+// ── 공정 일정 — 노무 품을 표준 시공 순서로 (0.5일 올림, 순차 합계) ──
+export function buildSchedule() {
+  const { laborDays } = buildEstimate();
+  const seqIdx = c => { const i = CREW_SEQ.indexOf(c); return i < 0 ? 99 : i; };
+  const items = (laborDays || [])
+    .filter(d => d.days > 0.05)
+    .map(d => ({ crew: d.crew, days: Math.max(0.5, Math.ceil(d.days * 2) / 2) }))
+    .sort((a, b) => seqIdx(a.crew) - seqIdx(b.crew));
+  return { items, total: items.reduce((s, x) => s + x.days, 0) };
+}
+
+export function renderProExtras(elOrder, elSched) {
+  if (!elOrder || !elSched) return;
+  const ol = buildOrderList();
+  elOrder.innerHTML = ol.length
+    ? `<table class="est"><thead><tr><th>자재</th><th class="r">소요</th><th class="r">로스</th><th class="r">발주</th></tr></thead><tbody>`
+      + ol.map(e => `<tr><td title="${e.pack.note || ''}">${e.name}</td>
+          <td class="r">${e.need.toFixed(1)}${e.unit === 'm' ? 'm' : '㎡'}</td>
+          <td class="r">${Math.round(e.pack.loss * 100)}%</td>
+          <td class="r"><b>${e.buy} ${e.pack.pack}</b></td></tr>`).join('')
+      + '</tbody></table><div class="disc">포장 규격·로스율은 제품별로 확인 후 조정하세요</div>'
+    : '<div class="disc">발주 대상 자재 없음 (기존 유지 마감)</div>';
+  const sc = buildSchedule();
+  elSched.innerHTML = sc.items.length
+    ? sc.items.map(x => `<div class="sched-row"><span>${x.crew}</span>
+        <i style="width:${Math.max(8, Math.min(100, x.days / sc.total * 100))}%"></i><b>${x.days}일</b></div>`).join('')
+      + `<div class="disc">총 <b>${sc.total}일</b> — 순차 시공 기준(병행 시 단축), 자재 수급 별도</div>`
+    : '<div class="disc">일정 산출 대상 없음</div>';
 }
 
 // ── 내 집 모드 요약 — buildEstimate() 재활용, 방별 합계 + 자재등급 범위 ──
@@ -177,8 +238,12 @@ export function renderEstimate(elSummary, elTable) {
     <tr class="sum"><td colspan="6">부가세</td><td class="r">${KRW(Math.round(vat))}</td></tr>
     <tr class="sum tot"><td colspan="6">총계</td><td class="r">${KRW(Math.round(total))}</td></tr>
     </tbody></table>
+    <label class="disc rate-my"><input type="checkbox" id="rateToMy" ${getBiz().saveToMy ? 'checked' : ''}>
+      단가 수정을 <b>내 단가표</b>에도 저장 (모든 현장 기본값)</label>
     <div class="disc" style="margin-top:6px">개략 실측(iPhone LiDAR) 기반 — 시공 발주 전 정밀실측 필요. 단가 수정은 즉시 반영·저장됩니다.</div>`;
   elTable.innerHTML = html;
+  const chkMy = elTable.querySelector('#rateToMy');
+  if (chkMy) chkMy.onchange = () => saveBiz({ saveToMy: chkMy.checked });
 
   // 단가 인라인 수정
   elTable.querySelectorAll('.rate-in').forEach(inp => {
@@ -189,7 +254,9 @@ export function renderEstimate(elSummary, elTable) {
       // 반대편 값은 화면의 짝 입력칸에서 읽는다 — 'furn:' 등 카탈로그 밖 id도 안전
       const other = elTable.querySelector(`.rate-in[data-id="${(window.CSS && CSS.escape) ? CSS.escape(id) : id}"][data-kind="${kind === 'm' ? 'l' : 'm'}"]`);
       const ov2 = Number(String(other?.value ?? '').replace(/[^\d]/g, '')) || 0;
-      state.project.rates[id] = { m: kind === 'm' ? v : ov2, l: kind === 'l' ? v : ov2 };
+      const nm2 = kind === 'm' ? v : ov2, nl2 = kind === 'l' ? v : ov2;
+      state.project.rates[id] = { m: nm2, l: nl2 };
+      if (getBiz().saveToMy && id !== 'biz_margin') setMyRate(id, nm2, nl2);   // 내 단가표에도 반영
       emit('rates');
     });
   });

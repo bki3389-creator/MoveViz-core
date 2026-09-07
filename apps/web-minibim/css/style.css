@@ -286,3 +286,45 @@ html { -webkit-text-size-adjust: 100%; }
   .shot-head { flex-wrap: wrap; gap: 6px; }
   #shotCanvas { width: 100%; height: 100%; flex: 1 1 auto; min-height: 0; object-fit: contain; }
 }
+
+/* ═══════════════ 프로 스프린트: 고객 뷰·프로필·발주/일정·견적서 ═══════════════ */
+/* 고객 링크 뷰 — 편집·저장·모드 전환 봉인 (읽기전용 리포트) */
+#custBanner { background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 600;
+  padding: 7px 14px; text-align: center; }
+body.customer #btnNew, body.customer #btnOpen, body.customer #btnSave, body.customer #modeSwitch,
+body.customer #sampleGallery, body.customer #left .tip, body.customer .rc-del,
+body.customer #btnArrange, body.customer #left .panel-title:nth-of-type(2) { display: none !important; }
+
+/* 사업자 프로필 다이얼로그 */
+#bizModal { position: fixed; inset: 0; background: rgba(10,14,20,.55); z-index: 70;
+  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+#bizModal[hidden] { display: none; }
+.biz-box { text-align: left; }
+.biz-box .mo-title small { font-size: 12px; color: var(--sub); font-weight: 400; }
+.biz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 6px; }
+.biz-grid label { font-size: 11.5px; color: var(--sub); display: flex; flex-direction: column; gap: 4px; }
+.biz-grid input { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 9px; font: inherit; font-size: 13px; color: var(--ink); }
+.biz-grid input:focus { outline: none; border-color: var(--accent); }
+@media (max-width: 560px) { .biz-grid { grid-template-columns: 1fr; } }
+
+/* 발주·일정 박스 */
+#orderBox, #schedBox { border-top: 1px solid var(--line); padding: 4px 10px 8px; }
+#orderBox summary, #schedBox summary { cursor: pointer; font-weight: 700; font-size: 12px; padding: 6px 0; }
+.sched-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 3px 0; }
+.sched-row span { flex: 0 0 84px; color: var(--sub); }
+.sched-row i { display: block; height: 10px; border-radius: 5px; background: var(--accent); opacity: .75; }
+.sched-row b { flex: 0 0 auto; }
+.rate-my { display: block; margin-top: 8px; cursor: pointer; }
+.rate-my input { vertical-align: -2px; margin-right: 4px; }
+
+/* 견적서 인쇄 헤더 */
+@media print {
+  #custBanner, #bizModal, #modeOverlay, #toast { display: none !important; }
+  .pbiz { display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 3px solid #1d2734; padding-bottom: 10px; margin-bottom: 14px; }
+  .pbiz-l { display: flex; gap: 12px; align-items: center; font-size: 12px; line-height: 1.6; }
+  .plogo { max-height: 46px; max-width: 140px; }
+  .pdoc { text-align: right; font-size: 21px; font-weight: 800; letter-spacing: 6px; }
+  .pdoc small { display: block; font-size: 10px; font-weight: 400; letter-spacing: 0; color: #555; margin-top: 4px; }
+}

@@ -18,6 +18,7 @@
 </script>
 </head>
 <body>
+<div id="custBanner" hidden></div>
 <header id="topbar">
   <div class="brand">Plan<span>Shot</span> <em>미니BIM v5</em></div>
   <input id="projName" placeholder="현장명" />
@@ -29,8 +30,10 @@
   <input type="file" id="fileIn" accept=".json" multiple hidden>
   <button id="btnSave" class="btn ghost">프로젝트 저장</button>
   <button id="btnDXF" class="btn ghost pro-only">DXF</button>
+  <button id="btnBiz" class="btn ghost pro-only" title="상호·연락처·로고·이윤율 — 견적서와 고객 링크에 표시">⚙ 설정</button>
   <button id="btnCSV" class="btn accent pro-only">견적 CSV</button>
-  <button id="btnPrint" class="btn accent"><span class="pro-only">인쇄</span><span class="home-only">보고서 인쇄</span></button>
+  <button id="btnShare" class="btn accent pro-only" title="이 프로젝트를 고객용 읽기전용 링크로 복사">📤 고객 보내기</button>
+  <button id="btnPrint" class="btn accent"><span class="pro-only">견적서 인쇄</span><span class="home-only">보고서 인쇄</span></button>
 </header>
 
 <div id="layout">
@@ -102,8 +105,35 @@
         <summary><span class="pro-only">상세 내역</span><span class="home-only">자세한 내역 보기</span></summary>
         <div id="estTable"></div>
       </details>
+      <details id="orderBox" class="pro-only">
+        <summary>발주 수량 (로스 포함)</summary>
+        <div id="orderTable"></div>
+      </details>
+      <details id="schedBox" class="pro-only">
+        <summary>공정 일정 (예상)</summary>
+        <div id="schedTable"></div>
+      </details>
     </section>
   </aside>
+</div>
+
+<div id="bizModal" hidden>
+  <div class="mo-box biz-box">
+    <div class="mo-title">사업자 프로필 <small>— 견적서·고객 링크에 표시됩니다</small></div>
+    <div class="biz-grid">
+      <label>상호 <input id="bzName" placeholder="OO인테리어"></label>
+      <label>연락처 <input id="bzPhone" placeholder="010-0000-0000"></label>
+      <label>사업자번호 <input id="bzNum" placeholder="000-00-00000"></label>
+      <label>입금계좌 <input id="bzAcct" placeholder="OO은행 000-000-000000"></label>
+      <label>이윤·일반관리비 % <input id="bzMargin" type="number" min="0" max="30" step="1" placeholder="0"></label>
+      <label>로고 <input id="bzLogo" type="file" accept="image/*"></label>
+    </div>
+    <img id="bzLogoPrev" alt="" style="max-height:40px;margin:8px auto 0;display:none">
+    <div class="ai-row" style="justify-content:center;margin-top:14px">
+      <button id="bzSave" class="btn accent">저장</button>
+      <button id="bzClose" class="btn ghost">닫기</button>
+    </div>
+  </div>
 </div>
 
 <div id="modeOverlay" hidden>

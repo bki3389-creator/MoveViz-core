@@ -364,7 +364,7 @@ export function restore() {
 }
 let _saveTimer = null;
 on(() => {
-  if (!state.project) return;
+  if (!state.project || state.noAutosave) return;   // 고객 링크 뷰 — 보는 사람의 자동저장을 덮지 않음
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(autosave, 400);
 });
