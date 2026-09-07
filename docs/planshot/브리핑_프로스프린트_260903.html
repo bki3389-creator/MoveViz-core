@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PlanShot 프로 스프린트 브리핑 — 260903</title>
+<style>
+  :root { --ink:#1d2734; --sub:#687382; --accent:#157fbe; --accent2:#17967e; --bg:#f4f6f9; --card:#fff; --line:#dfe5ec; --warn:#c0392b; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--ink); font:15px/1.65 -apple-system,'Segoe UI','Malgun Gothic',sans-serif; padding:28px 16px 80px; }
+  .wrap { max-width:880px; margin:0 auto; }
+  h1 { font-size:24px; margin-bottom:4px; } h1 span { color:var(--accent); }
+  .date { color:var(--sub); font-size:13px; margin-bottom:26px; }
+  h2 { font-size:18px; margin:34px 0 12px; padding-left:12px; border-left:4px solid var(--accent); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:14px; }
+  .flow { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; margin:10px 0; }
+  .fbox { background:#eef4fa; border:1.5px solid #bcd4e8; border-radius:10px; padding:10px 14px; font-size:13px; text-align:center; flex:1; min-width:130px; }
+  .fbox b { display:block; font-size:13.5px; }
+  .fbox small { color:var(--sub); font-size:11.5px; }
+  .fbox.key { background:#fdf0ee; border-color:#e6b8b2; }
+  .fbox.good { background:#edf7f2; border-color:#b5dcc9; }
+  .arr { align-self:center; padding:0 8px; color:var(--sub); font-size:18px; flex:0 0 auto; }
+  .bad { color:var(--warn); font-weight:700; } .ok { color:var(--accent2); font-weight:700; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { border-bottom:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; }
+  th { background:#f2f5f9; font-size:12px; }
+  .sev { font-weight:800; } .sev.c { color:#8e2b1f; } .sev.h { color:var(--warn); } .sev.m { color:#b8860b; } .sev.l { color:var(--sub); }
+  code { background:#eef1f5; border-radius:5px; padding:1px 6px; font-size:12.5px; }
+  .btn { display:inline-block; background:var(--accent); color:#fff; text-decoration:none; padding:10px 18px; border-radius:10px; font-weight:700; margin:6px 8px 0 0; }
+  .btn.ghost { background:#fff; color:var(--accent); border:1.5px solid var(--accent); }
+  .note { font-size:12.5px; color:var(--sub); margin-top:8px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:640px){ .grid2 { grid-template-columns:1fr; } .arr { transform:rotate(90deg); margin:2px auto; } .flow { flex-direction:column; } }
+  .step { display:flex; gap:10px; margin:8px 0; }
+  .step b.n { flex:0 0 26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; text-align:center; line-height:26px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Plan<span>Shot</span> 프로 스프린트 브리핑</h1>
+  <div class="date">2026-09-03 · 커밋 1dd5f2c → 375ae0c · 테스트 11파일 전체 통과 · 라이브 자동 배포됨</div>
+
+  <h2>❓ "AI 프록시 배포"가 뭘 하는 건가</h2>
+  <div class="card">
+    <p><b>문제:</b> 지금 AI 디자이너는 <span class="bad">쓰는 사람이 자기 Anthropic API 키를 직접 입력</span>해야 작동합니다. 심사위원·고객·일반 사용자는 키가 없으니 <b>AI가 그냥 안 되는 것</b>처럼 보입니다. 그렇다고 내 키를 웹 코드에 심으면(공개 레포!) 누구나 훔쳐서 무한 과금시킬 수 있습니다.</p>
+    <div class="flow" style="margin-top:14px">
+      <div class="fbox key"><b>지금</b><small>브라우저 → (본인 키 입력) → Anthropic<br>키 없으면 AI 먹통</small></div>
+    </div>
+    <div class="flow">
+      <div class="fbox good"><b>프록시 후</b><small>브라우저</small></div>
+      <div class="arr">→</div>
+      <div class="fbox good"><b>Cloudflare Worker</b><small>내 키를 서버에만 보관<br>IP당 하루 30회 제한<br>모델 화이트리스트</small></div>
+      <div class="arr">→</div>
+      <div class="fbox good"><b>Anthropic API</b><small>비용은 내 키로, 리밋으로 상한</small></div>
+    </div>
+    <p style="margin-top:10px"><b>즉, 누구든 링크만 열면 키 입력 없이 AI 디자이너가 작동</b>하게 만드는 중계 서버 1개를 띄우는 일입니다. 코드는 이미 다 작성돼 repo에 있습니다(<code>infra/ai-proxy/</code>) — 남은 건 계정 작업뿐:</p>
+    <div class="step"><b class="n">1</b><div>Cloudflare 무료 계정 (있으면 생략)</div></div>
+    <div class="step"><b class="n">2</b><div><code>wrangler login</code> → <code>wrangler deploy</code> → <code>wrangler secret put ANTHROPIC_API_KEY</code> (키 입력)</div></div>
+    <div class="step"><b class="n">3</b><div>나온 워커 주소를 <code>js/config.js</code>의 <code>AI_PROXY_URL</code>에 붙여넣고 푸시 → 끝</div></div>
+    <p class="note">비용: Worker는 무료 티어로 충분. AI 호출 비용만 내 키로 결제되는데 하루 30회/IP 리밋이 상한을 잡습니다. 5~10분 작업.</p>
+  </div>
+
+  <h2>🔧 오늘 만든 것 — 프로의 "계산을 돈으로 바꾸는 출구" 4종</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="fbox"><b>실측 스캔</b><small>iPhone LiDAR</small></div><div class="arr">→</div>
+      <div class="fbox"><b>도면·물량</b><small>자동 (기존)</small></div><div class="arr">→</div>
+      <div class="fbox good"><b>발주 수량 ①</b><small>실크 9롤·강마루 16박스<br>로스·포장단위 24종</small></div><div class="arr">→</div>
+      <div class="fbox good"><b>견적서 ②③</b><small>로고·이윤% 얹은 양식<br>내 단가표 전역 저장</small></div><div class="arr">→</div>
+      <div class="fbox good"><b>고객 링크 ④</b><small>카톡 한 줄 = 읽기전용<br>리포트 (서버 불요)</small></div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div><b>① 발주 수량</b> — 물량 × (1+로스) ÷ 포장단위 올림. 벽지 롤·마루 박스·몰딩 본. + <b>공정 일정</b>: 철거→목공→도배→마루 순서로 총 N일 막대.</div>
+      <div><b>② 사업자 프로필(⚙ 설정)</b> — 상호·연락처·계좌·로고·이윤/일반관리비%. '견적서 인쇄'가 브랜딩 견적서로.</div>
+      <div><b>③ 내 단가표</b> — 단가 수정 시 체크 한 번으로 모든 현장 기본값. 우선순위: 현장 조정 &gt; 내 단가 &gt; 카탈로그.</div>
+      <div><b>④ 고객 보내기(📤)</b> — 이윤·단가까지 구운 프로젝트를 URL 해시에 압축(~2KB). 받는 쪽은 배너 붙은 읽기전용 내 집 화면. 편집·저장·덮어쓰기 봉인.</div>
+    </div>
+  </div>
+
+  <h2>🛡 적대 감사(44 에이전트) — 확정 12건 전부 수정</h2>
+  <div class="card">
+    <table>
+      <tr><th>심각도</th><th>결함</th><th>수정</th></tr>
+      <tr><td class="sev c">치명</td><td>고객 링크로 원격 XSS — 방 이름에 스크립트 심으면 API 키 탈취 가능</td><td>견적표 전 필드 이스케이프 + 악성 링크 실주입 테스트로 발화 0건 실증</td></tr>
+      <tr><td class="sev h">높음</td><td>링크 한 번 열면 보는 사람의 자동저장 프로젝트가 400ms 뒤 덮여 소실</td><td>부팅 동기 구간에서 선차단 + 저장 함수 이중 가드</td></tr>
+      <tr><td class="sev h">높음</td><td>고객이 프로보다 ~24% 싼 총액을 봄 (이윤·내 단가가 링크에 안 실림)</td><td>발송 시점에 유효 단가·이윤%를 구워 넣음 → 총액 일치 테스트 고정</td></tr>
+      <tr><td class="sev m">중간</td><td>고객 화면이 키보드·인스펙터로 사실상 편집 가능</td><td>삭제·편집 봉인 (마감 골라보기·AI는 유지 — 영업 장난감)</td></tr>
+      <tr><td class="sev m">중간</td><td>공정 일정이 욕실 패키지 등 25개 공종 노무를 누락</td><td>미등록 공종 '기타' 집계 — 총일수 과소 표기 해소</td></tr>
+      <tr><td class="sev l">낮음</td><td>손상 링크 무통보 샘플 폴백 · 이윤행 입력칸 · 인쇄에 내부 체크박스 등 7건</td><td>전부 수정</td></tr>
+    </table>
+  </div>
+
+  <h2>🔗 바로 열어보기</h2>
+  <div class="card">
+    <a class="btn" href="https://bki3389-creator.github.io/MoveViz-core/?mode=pro">프로 모드 (라이브)</a>
+    <a class="btn ghost" href="https://bki3389-creator.github.io/MoveViz-core/?mode=home">내 집 모드 (라이브)</a>
+    <a class="btn ghost" href="https://bki3389-creator.github.io/MoveViz-core/#r=1Zjdbts2FMdfxTi95QiRkvyhB9jtOjTYjWEYssXYhGXJk5k4TmAgRduhXQz0phm2Dik2rO3aYRcpWmAp0L1QLb_DQEqWJdly3NTA0BvzmKQOKZL_H8_RCRyCRRC0-DFYJ-DZfQYWzC4-hBfv5k_uh0_-DV8-LIUXV_MH09nLv8Of3gGCQdf3ZDeNaF9pmhb9wATBQPo4ZMGQ-55yu_D31-vZ419K4fn9-XQ6__GqRI3540eAoO33B7Y3Bgtuu7Z3p-sLWely5gn52OV5-Ofp_NeHgODQFrfbAiyiIQhswYZgnUwQBL7fH4JVPwHugAUBadoDoUMy8sc3l-HZczln1_bk7Ib-QdCWLUO7P3AZINh3fT9ojsHSELQZd6VJsY6g5R94jh2MwarXNaQ1UN3EZlIamDZQXVNlA8HRCKx6A8FxXPoD5nGvE81NjAdySMf3A0Awsl236fAALDha_B34Q7CkWxgO5ETrOtJxrYFgxB3RBUvDNQRdxjtdIWdHJijxOuKe4482-dUSrxquIh0bS78Ul9N-6TV-jwv86riMDFxd-iWYLv0SbEwa-b3SEAx8d9yRJ2WL9bUDZjf7FCyqY5LfXul9_yDwuDgImBrBb7WkW4JNROU61vWMpcu5qlZpNRC0bcE6vtxrGPr7Nixrmj0fLAh_mM6n05IeXlwBgrE9ajqso16CHfGh4F4HLBEcMLl-ydhlpGFiqiGNrGmaavhyZGbHb9st7jGxMoW978JnL0qkqmmbZ9CYxGf6a-7xYRcs2Hebrt3nni1YvH9J08htDrnbg-joJ9XtpFr2_uaQBQF3FpqTVXvjweKvfJB7nb3o1LRFc8RcFxC4cvNT2rRdAmhxuFzR5J6zZwKCI3lACIJjRYwjCpaBDQTHFCx1zOOH6XUP6_LIZR7Xo_McO9AzDhx_5OkLB4ZyEMsq7m4Udae4Yq7pbxb1N-L5ye4NeejluskGTVVrE7mDIrDlUjUShwHNkSz848Ps8vWuSCYXa1FSJQZNlTsiWZo4NUTSJCOfwrEi3hBEJR4KaEO3o82GNUhoU8W1cn4LCmlDMTWlzpVPkjMleuIOtZziA7Yf8A4LbKFWNSv72b1H4bMXH9_-tjV3EMGVaLCURbFCjiqzowu7pU5PDnhnF_N7d0vGtcD733HTY2ywDjc9sqLIcqRIeQsq6eHKUsA9WtSdxnzIds_iZMA8x_bEAijl9YpXF3xe87HHUbPHRbvLvFty3t-LMVh6Mtyo2fV955a2aCGTFCn0PCment8s5qHrSEHjXxrfx3R38U6aEhVE5AldxjvVFCe203PBTBMtq3shu0aFUtZiKUf3dCVvSzFr68XcskVXHLRWBfX0PPz9skTM6-7vdARhICKjtTrB1ZRFFVdkq7Ryava5uyZ4mL09_Xh1ue3A6tVIFKVouJq16eLdaT5w4l5v9bXvX81ev5tNT29AEcFdpqvlykNEtqyDSKe1W4a0NjCkEoUs6SCgVcgQkjCknEVCOfZDcXUtFKL9XDKBpJjQsofcK2oS3X37oM1EATSMPDTevwrPnpPdxRflpNRjPeqfQ46iSICqGN64caaU9atiyFSMkcloqjfIaDasQ8IlQrBJVzbiOjTVsjRSJl2Cia6CiTmr6nz_ajY9LX27LRgorkkY6FEalTGjAEN1WI0xinKa8Od_VFJDs1CsfUFhRj-LCOZ02ELy1ZgQ5SUh-quE0LNAoekoo1-YtFB5zOPua7IKQ6Y-a3AihdUcFlLBXEsFujMqxL9UhaWaKndOBE3dmvqOiEDltqRyGXX3ft5XjoJVSOUcZGUDNnzhUAgwI_FVszZdfGioxPbWRLhzZ_tYgcShSRTELSyKy8oiytoq5XjzILx394uGgVcMAzOGgW4u5e1toEE5yTky8tbjhk8TeANB3w463Iu_oU4m_wE">📤 데모 고객 링크 — 고객이 받는 화면</a>
+    <p class="note">고객 링크는 "라이프씽즈 인테리어 · 이윤 10%"를 구워 넣은 목동 아파트 24평 리포트입니다. 폰에서 열어보면 카톡으로 받은 고객의 경험 그대로입니다. (클립보드에도 복사돼 있음)</p>
+  </div>
+</div>
+</body>
+</html>
