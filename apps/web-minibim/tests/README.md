@@ -23,3 +23,13 @@ node apps/web-minibim/tests/test_split.mjs     # 개별
 주의: scene3d.js는 bare specifier(three-bvh-csg) 때문에 node로 import 불가 — 3D는
 헤드리스 크롬(`?sample&tab=3d&rendershot=N` + 콘솔 grep)으로 검증한다.
 산출물은 `tests/.out/`(gitignore)에 생성.
+
+공간 제안 검증은 `test_proposal.mjs`가 전체 러너에 포함된다. 별도 브라우저 검증:
+
+```
+node apps/web-minibim/tests/browser_proposal.mjs
+```
+
+`serve.py` 서버와 Node 22+, Chrome/Edge가 필요하다. 브라우저 위치는 `CHROME_PATH`로 지정할 수 있다.
+제안 비교·모델 미리보기·적용/Undo/복원·고객 링크·모바일·기존 샘플 경로를 검사하고,
+화면을 `tests/.out/proposal-smoke/`에 저장한다. 기존 11개 도메인 테스트와 달리 자동 배포 환경의 기본 검증에는 아직 연결되어 있지 않다.

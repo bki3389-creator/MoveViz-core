@@ -9,21 +9,20 @@ import { getBiz, saveBiz, setMyRate } from './biz.js';
 const isWet = name => /욕실|화장실|발코니|베란다/.test(name || '');
 
 // 견적 라인 생성: [{roomName, cat, id, name, spec, unit, qty, rate, amount}]
-export function buildEstimate() {
+export function buildEstimate(P = state.project, { biz = getBiz(), customerView = state.customerView } = {}) {
   const rows = [];
-  const P = state.project;
-  if (!P) return { rows, sub: 0, vat: 0, total: 0 };
+  if (!P) return { rows, sub: 0, subM: 0, subL: 0, vat: 0, total: 0, laborDays: [], demoTons: 0 };
   // 단가 우선순위: 현장별 조정(project.rates) > 내 단가표(전역) > 카탈로그 기본.
   // 고객 링크 뷰에선 열람자의 내 단가표를 섞지 않는다 — 보낸 견적 그대로(감사 확정)
-  const OV = state.customerView ? { ...(P.rates || {}) } : { ...getBiz().myRates, ...(P.rates || {}) };
+  const OV = customerView ? { ...(P.rates || {}) } : { ...biz?.myRates, ...(P.rates || {}) };
 
   for (const r of P.rooms) {
-    const m = metricsOf(r);
-    const wallsAll = wallsOf(r);
+    const m = metricsOf(r, P);
+    const wallsAll = wallsOf(r, P);
     const push = (cat, id, qty, note = '') => {
       const it = item(id); if (!it || qty <= 0.001) return;
       const { m: rm, l: rl } = ratesOf(id, OV);
-      rows.push({ roomName: r.name, cat, id, name: it.name, spec: it.spec, unit: it.unit,
+      rows.push({ roomId: r.id, roomName: r.name, cat, id, name: it.name, spec: it.spec, unit: it.unit,
                   qty, m: rm, l: rl, rate: rm + rl,
                   amountM: qty * rm, amountL: qty * rl, amount: qty * (rm + rl), note });
     };
@@ -76,7 +75,7 @@ export function buildEstimate() {
       const fid = 'furn:' + pr.name;
       const ov = OV[fid];
       const rm2 = ov?.m ?? pr.m, rl2 = ov?.l ?? pr.l;
-      rows.push({ roomName: r.name, cat: '가구', id: fid, name: pr.name + ' 구입·설치',
+      rows.push({ roomId: r.id, roomName: r.name, cat: '가구', id: fid, name: pr.name + ' 구입·설치',
                   spec: f.replaced ? '교체' : '신규', unit: 'ea', qty: 1,
                   m: rm2, l: rl2, rate: rm2 + rl2, amountM: rm2, amountL: rl2, amount: rm2 + rl2,
                   note: f.replaced ? '기존 ' + f.replaced.name + ' 반출' : '가구 추가' });
@@ -90,7 +89,7 @@ export function buildEstimate() {
 
   // 이윤·일반관리비 — 사업자 설정 %(견적 관례상 소계 전 별도 행). 노무 품 환산 오염 방지 위해 amountM 측.
   // 고객 링크는 발송 시 project.marginPct로 구워져 옴 — 프로젝트 값이 열람자 설정보다 우선
-  const mp = Number(P.marginPct ?? (state.customerView ? 0 : getBiz().marginPct)) || 0;
+  const mp = Number(P.marginPct ?? (customerView ? 0 : biz?.marginPct)) || 0;
   if (mp > 0 && rows.length) {
     const base = rows.reduce((s, x) => s + x.amount, 0);
     const mAmt = base * mp / 100;

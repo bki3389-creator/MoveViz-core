@@ -150,6 +150,7 @@ export function describeChange(ch) {
 }
 
 export function applyChange(ch) {
+  if (state.customerView) return false;
   // 실명이 지정됐는데 없으면 '불가' — 조용히 선택된 방에 적용하면 무증상 오적용 (2차 감사 확정)
   const rooms = state.project?.rooms || [];
   const r = ch.room ? rooms.find(x => x.name === ch.room) : room(state.selRoom);

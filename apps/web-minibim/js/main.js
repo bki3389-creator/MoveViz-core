@@ -12,6 +12,8 @@ import { initMode, getMode, setMode, openModeOverlay, wireModeOverlay, overlayOp
          closeModeOverlay, ezApply } from './mode.js';
 import { getBiz, saveBiz } from './biz.js';
 import { makeShareLink, parseShareHash } from './share.js';
+import { initProposal } from './proposal.js';
+import { snapshotProposalProject } from './proposal-model.js';
 import { exportDXF } from './dxf.js';
 import * as ai from './ai.js';
 import { FINISH_FLOOR, FINISH_WALL, FINISH_CEIL, CEIL_TYPES, WALL_TYPES, LIGHTS, FURN_ITEMS, furnKgOf, furnDisposalKg, ratesOf,
@@ -50,10 +52,18 @@ on(what => {
   if (what === 'tool') syncToolbar();
 });
 rebuild3D(); frameAll(); emit('init');
+const proposalUI = initProposal({
+  onEdit: tab => { setTab(tab); requestAnimationFrame(() => { frameAll(); render2d(); }); },
+  onShare: project => shareProject(project),
+});
+$('btnProposal').onclick = () => proposalUI.open();
 
 // URL 파라미터 — 스크린샷/딥링크 검증용: ?sample(샘플 자동 로드) &tab=2d|3d &room=이름 &ceil=1
 (async () => {
   const q = new URLSearchParams(location.search);
+  const wantsProposal = q.get('view') === 'proposal' ||
+    (q.get('view') !== 'editor' && !q.has('sample') && !q.has('tab') && !q.has('rendershot'));
+  if (wantsProposal && !MODE_DECIDED) setMode('pro', { persist: false, silent: true });
   // 고객 링크(#r=) — 읽기전용 '고객 화면': 내 집 모드 강제 + 편집·저장 봉인 + 자동저장 차단
   const shared = await parseShareHash();
   if (!shared && location.hash.startsWith('#r=')) {
@@ -66,19 +76,23 @@ rebuild3D(); frameAll(); emit('init');
     state.noAutosave = true;                        // 보는 사람의 자기 프로젝트를 덮지 않는다
     document.body.classList.add('customer');
     setMode('home', { persist: false, silent: true });
-    try { loadJSONText(JSON.stringify(shared.p), '고객링크'); } catch {}
+    try { loadJSONText(JSON.stringify(shared.p), '고객링크'); }
+    catch { state.project = newProject('리포트를 불러오지 못했습니다'); state.selRoom = null; emit('project'); }
     const bn = shared.biz?.name ? `${shared.biz.name}에서 보낸 ` : '';
     const bp = shared.biz?.phone ? ` · ${shared.biz.phone}` : '';
     $('custBanner').textContent = `📋 ${bn}우리 집 리포트${bp}`;
     $('custBanner').hidden = false;
     $('projName').readOnly = true;
+    $('inspector').inert = true;
+    $('estTable').inert = true;
     frameAll();
     setTab('3d');
   }
-  if (q.has('sample')) {
+  if (q.has('sample') && !shared) {
     try {
       const res = await fetch('./sample/sample_project.json');
       loadJSONText(await res.text(), 'sample');
+      state.project.proposalDemo = true;
       frameAll();
     } catch {}
   }
@@ -91,10 +105,11 @@ rebuild3D(); frameAll(); emit('init');
   if (q.has('rendershot')) setTimeout(() => runRenderShot(Number(q.get('rendershot')) || 24, 640, 400), 800);
   if (q.has('sample') || q.get('ceil') === '1') { rebuild3D(); emit('select'); }
   // 온보딩: 프로젝트가 비어 있으면 모드에 맞는 샘플 자동 로드 (첫 방문은 모드 선택 후에)
-  if (!q.has('sample') && !shared && MODE_DECIDED) await loadStarterSample();
+  if (!q.has('sample') && !shared && (MODE_DECIDED || wantsProposal)) await loadStarterSample();
   wireModeOverlay(m => { setTab(m === 'pro' ? '2d' : '3d'); loadStarterSample(); });
-  if (!MODE_DECIDED && !shared) openModeOverlay(false);   // 첫 방문 — 선택 강제(Esc 불가)
+  if (!MODE_DECIDED && !shared && !wantsProposal) openModeOverlay(false);
   emit('mode');                                 // 모드별 초기 상태(상세 열림/힌트) 1회 적용
+  if (wantsProposal || (shared && q.get('view') !== 'editor')) proposalUI.open();
 })();
 
 /// 비어 있을 때만 모드 맞춤 샘플 로드 + 온보딩 토스트
@@ -106,6 +121,7 @@ async function loadStarterSample() {
     const file = getMode() === 'pro' ? 'sample/sample_apt3.json' : 'sample/sample_studio.json';
     const res = await fetch('./' + file);
     loadJSONText(await res.text(), file.split('/').pop());
+    state.project.proposalDemo = true;
     frameAll();
     toast('샘플 하우스입니다 — iPhone 스캔 plan.json을 열면 내 집이 됩니다', 3200);
     if (getMode() === 'home') $('btnWalk').classList.add('pulse');
@@ -133,24 +149,25 @@ $('fileIn').addEventListener('change', async e => {
   for (const f of e.target.files) loadJSONText(await f.text(), f.name);
   frameAll(); e.target.value = '';
 });
-$('btnSave').onclick = () => saveProjectFile();
+$('btnSave').onclick = () => saveProjectFile(snapshotProposalProject(state.project, getBiz()));
 $('btnCSV').onclick = () => exportCSV();
 $('btnDXF').onclick = () => exportDXF();
 $('btnPrint').onclick = () => window.print();
 
 // ── 고객 보내기 — 프로젝트를 읽기전용 링크로 (클립보드 + 모바일 공유시트) ──
-$('btnShare').onclick = async () => {
-  if (!(state.project?.rooms?.length)) return alert('보낼 방이 없습니다');
+$('btnShare').onclick = () => shareProject(state.project);
+async function shareProject(project) {
+  if (state.customerView) return false;
+  if (!(project?.rooms?.length)) { alert('보낼 방이 없습니다'); return false; }
   // 발송 시점의 '유효 견적'을 구워 넣는다 — 내 단가표·이윤율은 열람자 localStorage에 없으므로
   // 링크에 담지 않으면 고객이 더 싼 총액을 보게 된다(감사 확정)
-  const baked = JSON.parse(JSON.stringify(state.project));
-  baked.rates = { ...getBiz().myRates, ...(baked.rates || {}) };
-  const mp = Number(getBiz().marginPct) || 0;
-  if (mp > 0) baked.marginPct = mp;
+  const baked = snapshotProposalProject(project, getBiz());
   const link = await makeShareLink(baked, getBiz());
-  if (!link) return alert('프로젝트가 너무 커서 링크로 담을 수 없습니다 — [프로젝트 저장] 파일을 전달하세요');
+  if (!link) { alert('프로젝트가 너무 커서 링크로 담을 수 없습니다 — [프로젝트 저장] 파일을 전달하세요'); return false; }
+  let copied = false;
   try {
     await navigator.clipboard.writeText(link);
+    copied = true;
     toast('고객 링크 복사됨 — 카톡·문자에 붙여넣으세요 (받는 사람은 열기만 하면 됩니다)', 3600);
   } catch {
     prompt('아래 링크를 복사하세요', link);
@@ -158,7 +175,8 @@ $('btnShare').onclick = async () => {
   if (navigator.share && matchMedia('(pointer: coarse)').matches) {
     try { await navigator.share({ title: 'PlanShot 우리 집 리포트', url: link }); } catch {}
   }
-};
+  return copied;
+}
 
 // ── 사업자 프로필 (전역 — 견적서·고객 링크·이윤율) ──
 const BZ_FIELDS = [['bzName', 'name'], ['bzPhone', 'phone'], ['bzNum', 'biznum'], ['bzAcct', 'acct'], ['bzMargin', 'marginPct']];
@@ -196,12 +214,13 @@ $('bzSave').onclick = () => {
 $('btnNew').onclick = () => {
   if (!confirm('현재 프로젝트를 비우고 새로 시작할까요? (저장 안 한 내용은 사라짐)')) return;
   state.project = newProject($('projName').value || '새 현장');
-  state.sel = null; state.selRoom = null;
+  state.sel = null; state.selRoom = null; stateMod.clearHistory();
   emit('project'); frameAll();
 };
 
 for (const ev of ['dragover', 'drop']) document.body.addEventListener(ev, e => e.preventDefault());
 document.body.addEventListener('drop', async e => {
+  if (state.customerView) return;
   for (const f of e.dataTransfer.files) if (f.name.endsWith('.json')) loadJSONText(await f.text(), f.name);
   frameAll();
 });
@@ -412,6 +431,7 @@ $('modeSwitch').onclick = () => openModeOverlay(true);   // 재표시 — 이땐
 
 // ── 키보드 ──────────────────────────────────────
 document.addEventListener('keydown', e => {
+  if (document.body.classList.contains('proposal-open')) return;
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;   // 입력 중 가드
   if (isWalking()) return;   // 걷기 중 — 이동 키는 씬이 처리, Esc는 자체 종료

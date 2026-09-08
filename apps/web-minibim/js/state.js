@@ -109,7 +109,7 @@ function allOpenings(plan) {
 
 // 방의 벽 세그먼트 목록: 외곽 변 + 내부벽. 각 벽에 개구부(문/창) 부착.
 // wall = { key, x1,z1,x2,z2, dir:'x'|'z', pos, len, inner, openings:[{type,lo,hi,w,h}] , netArea, grossArea }
-export function wallsOf(r) {
+export function wallsOf(r, project = state.project) {
   const plan = r.plan, H = ceilH(plan), walls = [];
   const bd = plan.boundary || [];
   for (let i = 0; i < bd.length; i++) {
@@ -127,8 +127,8 @@ export function wallsOf(r) {
   const ops = allOpenings(plan).map((op, oi) => ({ op, oi, foreign: false, dPos: { x: 0, z: 0 } }));
   // 공유벽 전파: 조립된 다른 방의 개구부가 이 벽과 같은 세계선상에 있으면 이 벽도 뚫는다
   // (문이 한쪽 벽만 뚫리는 문제 해결 — 렌더는 컷만, 심볼·선택·개수는 소유 방이 담당)
-  if (state.project && r.pos) {
-    for (const other of state.project.rooms) {
+  if (project && r.pos) {
+    for (const other of project.rooms) {
       if (other.id === r.id || !other.pos) continue;
       for (const op of other.plan?.openings || []) {
         ops.push({ op, oi: -1, foreign: true,
@@ -164,10 +164,10 @@ export function wallsOf(r) {
   // 겹침 벽 시각 중복 제거: 프로젝트에서 나보다 앞선 방의 외곽 벽과 같은 선상(0.25m)·
   // 겹치는 구간은 그 방이 그린다 → 내 벽엔 shared 스팬으로 표시(렌더에서 건너뜀).
   // ⚠️ 수량(도배 순면적)은 방별 그대로 — 시각 전용.
-  if (state.project && r.pos) {
-    const myIdx = state.project.rooms.findIndex(x => x.id === r.id);
+  if (project && r.pos) {
+    const myIdx = project.rooms.findIndex(x => x.id === r.id);
     for (let pi = 0; pi < myIdx; pi++) {
-      const other = state.project.rooms[pi];
+      const other = project.rooms[pi];
       if (!other?.pos) continue;
       const obd = other.plan?.boundary || [];
       for (let i = 0; i < obd.length; i++) {
@@ -190,7 +190,7 @@ export function wallsOf(r) {
 
     // 외벽/내벽 판정: 벽 구간 바깥쪽 점이 어떤 실 폴리곤 안에도 없으면 외벽(외기 접함).
     // 공유 스팬(다른 방과 맞댐) = 내벽. 인테리어에선 외벽 철거 불가 — UI 경고에 사용.
-    const worldPolys = state.project.rooms
+    const worldPolys = project.rooms
       .filter(x => x.pos && x.plan?.boundary?.length >= 3)
       .map(x => x.plan.boundary.map(p2 => [p2[0] + x.pos.x, p2[1] + x.pos.z]));
     for (const wall of walls) {
@@ -231,13 +231,13 @@ export function wallsOf(r) {
 }
 
 // 실측 수량 요약 (견적·표시 공용)
-export function metricsOf(r) {
+export function metricsOf(r, project = state.project) {
   const plan = r.plan, H = ceilH(plan);
   const polys = (plan.rooms || []).filter(x => x.polygon && x.polygon.length >= 3).map(x => x.polygon);
   const boundary = plan.boundary && plan.boundary.length >= 3 ? plan.boundary : null;
   const area = polys.length ? polys.reduce((s, p) => s + polyArea(p), 0) : (boundary ? polyArea(boundary) : 0);
   const per = boundary ? polyPerimeter(boundary) : polys.reduce((s, p) => s + polyPerimeter(p), 0);
-  const walls = wallsOf(r);
+  const walls = wallsOf(r, project);
   const outer = walls.filter(w => !w.inner);
   let doorW = 0, doors = 0, windows = 0, openA = 0, winArea = 0, doorWAll = 0;
   for (const w of outer) for (const o of w.openings) {
@@ -329,6 +329,7 @@ export function loadJSONText(text, filename) {
       if (!r.wallTypes) r.wallTypes = {};
     });
     state.project = obj;
+    clearHistory();
     state.selRoom = obj.rooms[0]?.id || null;
     _rid = obj.rooms.length + 1;
     emit('project');
@@ -338,17 +339,18 @@ export function loadJSONText(text, filename) {
       || (Array.isArray(obj.rooms) && obj.rooms.length && !obj.version))) {
     if (!state.project) state.project = newProject();
     const name = (filename || '').replace(/\.json$/i, '').replace(/^plan[_-]?/i, '') || undefined;
+    clearHistory();   // 새 실을 추가한 뒤 이전 프로젝트 스냅샷으로 실을 잃지 않도록 경계 설정
     addRoom(obj, obj.rooms?.[0]?.name || name);
     return 'plan';
   }
   throw new Error('알 수 없는 JSON 형식: ' + filename);
 }
 
-export function saveProjectFile() {
-  const blob = new Blob([JSON.stringify(state.project, null, 2)], { type: 'application/json' });
+export function saveProjectFile(project = state.project) {
+  const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = (state.project.name || '미니빔') + '_프로젝트.json';
+  a.download = (project.name || '미니빔') + '_프로젝트.json';
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -397,6 +399,11 @@ export const snap = v => Math.round(Math.round(v / SNAP) * SNAP * 1000) / 1000; 
 
 // 언두 — 편집 직전 방 스냅샷(딥카피). 드래그는 drag 시작 시 1회 push.
 const _hist = [];
+export function clearHistory() { _hist.length = 0; }
+export function pushProjectHistory() {
+  _hist.push({ project: JSON.parse(JSON.stringify(state.project)), selRoom: state.selRoom });
+  if (_hist.length > 30) _hist.shift();
+}
 export function pushHistory(r) {
   _hist.push({ roomId: r.id, plan: JSON.parse(JSON.stringify(r.plan)),
                lights: JSON.parse(JSON.stringify(r.lights || [])),
@@ -407,6 +414,10 @@ export function pushHistory(r) {
 }
 export function undo() {
   const h = _hist.pop(); if (!h) return false;
+  if (h.project) {
+    state.project = h.project; state.selRoom = h.selRoom; state.sel = null;
+    emit('project'); return true;
+  }
   const r = room(h.roomId); if (!r) return false;
   r.plan = h.plan; r.lights = h.lights;
   if (h.ov) r.wallOverrides = h.ov;

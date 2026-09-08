@@ -4,7 +4,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { OrbitControls } from '../vendor/addons/controls/OrbitControls.js';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
-import { state, emit, layoutOffsets, wallsOf, wallCuts, ceilH, addLight, room, doorGeom, lightGridOf, finishColorOf } from './state.js';
+import { state, emit, layoutOffsets, wallsOf, wallCuts, ceilH, addLight, room, doorGeom, lightGridOf, finishColorOf, bboxOf } from './state.js';
 import { item, rateOf, FINISH_WALL } from './catalog.js';
 import { floorCanvas } from './textures.js';
 
@@ -78,6 +78,7 @@ function resize() {
 }
 function animate() {
   requestAnimationFrame(animate);
+  if (document.body.classList.contains('proposal-open')) return;
   if (walk) {
     const now = performance.now(), dt = Math.min(0.05, (now - walk.last) / 1000);
     walk.last = now;
@@ -550,7 +551,7 @@ function ringExtrude(outer, inner, depth) {
   return geo;
 }
 
-function buildRoom(r, g, allowRealLight) {
+function buildRoom(r, g, allowRealLight, project = state.project) {
   const plan = r.plan, H = ceilH(plan);
   const bd = plan.boundary || [];
   if (bd.length < 3) return;
@@ -582,7 +583,7 @@ function buildRoom(r, g, allowRealLight) {
   ceil.userData = { roomId: r.id, kind: 'ceiling', isCeil: true };
   g.add(ceil);
   // 조명 배치 그리드 — 조명 모드에서만 표시, 클릭 스냅 대상
-  if (state.mode === 'light') {
+  if (state.mode === 'light' && !state.customerView) {
     for (const [gx, gz] of lightGridOf(r)) {
       const dot = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.015, 12),
         new THREE.MeshBasicMaterial({ color: 0xd9a521, transparent: true, opacity: 0.55 }));
@@ -618,7 +619,7 @@ function buildRoom(r, g, allowRealLight) {
       }
     } else {
       // 폴백(사선/초소형 방): 벽별 박스 — 코너는 겹침 허용
-      for (const w of wallsOf(r).filter(w2 => !w2.inner)) {
+      for (const w of wallsOf(r, project).filter(w2 => !w2.inner)) {
         if (w.len < 0.05) continue;
         const mid = (w.lo + w.hi) / 2;
         const inw = w.dir === 'z'
@@ -635,7 +636,7 @@ function buildRoom(r, g, allowRealLight) {
   }
 
   // 벽 — 세그먼트·개구부 컷 (외벽은 두껍게)
-  for (const w of wallsOf(r)) {
+  for (const w of wallsOf(r, project)) {
     const wallT = w.inner ? 0.1 : (w.isExterior ? 0.18 : 0.12);
     const finish = r.wallOverrides?.[w.key] || r.wallFinish;
     const col = (!r.wallOverrides?.[w.key] ? finishColorOf(r, 'wall') : null) ?? finishColor(finish, 0xdedad2);
@@ -871,7 +872,7 @@ function onClick(e) {
   const hits = pickAt(e);
   if (!hits.length) { clearHighlight(); state.sel = null; state.pendingLine = null; emit('select'); return; }
 
-  if (state.mode === 'light') {
+  if (state.mode === 'light' && !state.customerView) {
     const h = hits.find(h => ['floor', 'ceiling'].includes(h.object.userData.kind));
     if (!h) return;
     const r = room(h.object.userData.roomId);
@@ -988,6 +989,63 @@ export function natureEquirect(W = 4096) {
 }
 
 export function getSceneRefs() { return { scene, camera, renderer, root }; }
+
+// 독립 제안의 실제 지오메트리. 프로젝트와 편집 카메라는 변경하지 않는다.
+export function captureProposalRoom(r, project) {
+  const bb = bboxOf(r.plan);
+  if (!renderer || !bb) throw new Error('미리보기 공간이 없습니다');
+  const preview = new THREE.Scene();
+  preview.background = new THREE.Color(0xedece5);
+  const group = new THREE.Group();
+  const size = renderer.getSize(new THREE.Vector2());
+  const ratio = renderer.getPixelRatio();
+  const tone = renderer.toneMapping, exposure = renderer.toneMappingExposure;
+  try {
+    buildRoom(r, group, () => false, project);
+    // 천장과 앞쪽 외곽벽을 연 모형 뷰. 모든 제안을 동일 시점으로 보여 준다.
+    const cutKeys = new Set(wallsOf(r, project).filter(w => !w.inner &&
+      ((w.dir === 'x' && Math.abs(w.pos - bb.maxX) < .15) ||
+       (w.dir === 'z' && Math.abs(w.pos - bb.maxZ) < .15))).map(w => w.key));
+    group.traverse(o => {
+      if (['ceiling','light'].includes(o.userData?.kind) || cutKeys.has(o.userData?.wallKey)) o.visible = false;
+    });
+    preview.add(group);
+    preview.add(new THREE.HemisphereLight(0xffffff, 0xc4bdb1, 2));
+    const sun = new THREE.DirectionalLight(0xfff6e9, 2.5);
+    sun.position.set(bb.maxX + 4, 9, bb.maxZ - 4); preview.add(sun);
+    const w = bb.maxX - bb.minX, d = bb.maxZ - bb.minZ;
+    const span = Math.max(w, d, 2), cx = (bb.maxX + bb.minX)/2, cz = (bb.maxZ + bb.minZ)/2;
+    const aspect = 1.6;
+    const cam = new THREE.OrthographicCamera(-1,1,1,-1,.05,200);
+    cam.position.set(cx + span, span * 1.15, cz + span);
+    cam.lookAt(cx,ceilH(r.plan)/2,cz);
+    cam.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(group);
+    const viewBounds = new THREE.Box3();
+    for (const x of [box.min.x,box.max.x]) for (const y of [box.min.y,box.max.y]) for (const z of [box.min.z,box.max.z])
+      viewBounds.expandByPoint(new THREE.Vector3(x,y,z).applyMatrix4(cam.matrixWorldInverse));
+    const h = Math.max(viewBounds.max.y-viewBounds.min.y,(viewBounds.max.x-viewBounds.min.x)/aspect)*1.12;
+    const vx = (viewBounds.min.x+viewBounds.max.x)/2, vy = (viewBounds.min.y+viewBounds.max.y)/2;
+    cam.left=vx-h*aspect/2; cam.right=vx+h*aspect/2; cam.top=vy+h/2; cam.bottom=vy-h/2;
+    cam.updateProjectionMatrix();
+    renderer.setPixelRatio(1); renderer.setSize(960,600,false);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+    renderer.render(preview,cam);
+    return renderer.domElement.toDataURL('image/jpeg',.87);
+  } finally {
+    renderer.setPixelRatio(ratio); renderer.setSize(size.x,size.y,false);
+    renderer.toneMapping = tone; renderer.toneMappingExposure = exposure;
+    const sharedTextures = new Set(texCache.values());
+    const textures = new Set();
+    group.traverse(o => { o.geometry?.dispose?.();
+      (Array.isArray(o.material) ? o.material : o.material ? [o.material] : []).forEach(m => {
+        if (m.map && !sharedTextures.has(m.map)) textures.add(m.map);
+        m.dispose();
+      }); });
+    for (const texture of textures) texture.dispose();
+    renderer.render(scene,camera);
+  }
+}
 
 export function frameAll() {
   const box = new THREE.Box3().setFromObject(root);
