@@ -1,4 +1,4 @@
-/* The proposal is a quiet, image-led counterpart to the working editor. */
+/* The customer deliverable uses the same measured project and priced finishes as the studio. */
 #proposalView {
   --prop-bg: #f7f6f2;
   --prop-ink: #292c27;
@@ -34,6 +34,8 @@ body.customer #t2Select, body.customer #viewTabs .tgroup { display: none !import
 .proposal-btn-dark:hover { background: #363f2f; border-color: #363f2f; }
 .proposal-btn-text { padding-right: 0; padding-left: 0; color: var(--prop-ink); background: transparent; }
 .proposal-btn-text:hover { color: var(--prop-olive); text-decoration: underline; text-underline-offset: 5px; }
+.proposal-btn-outline { border-color: #c9ccbf; color: var(--prop-olive); background: transparent; }
+.proposal-btn-outline:hover { border-color: var(--prop-olive); background: #eceee5; }
 .proposal-main { width: min(1440px, 91.1%); margin: 0 auto; }
 .proposal-projectbar { min-height: 77px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--prop-line); }
 .proposal-breadcrumb { display: flex; align-items: center; gap: 15px; min-width: 0; }
@@ -47,18 +49,19 @@ body.customer #t2Select, body.customer #viewTabs .tgroup { display: none !import
 .proposal-sender { padding: 14px 0 0; color: var(--prop-olive); font-size: 12px; }
 .proposal-intro { display: flex; justify-content: space-between; align-items: flex-end; gap: 28px; padding: 35px 0 31px; }
 .proposal-eyebrow { display: block; color: var(--prop-muted); font-size: 9px; letter-spacing: 2.1px; font-weight: 500; line-height: 1.7; }
-.proposal-intro h1 { margin-top: 9px; font-family: inherit; font-weight: 400; font-size: 42px; letter-spacing: -1.9px; line-height: 1.35; word-break: keep-all; }
-.proposal-intro-copy { padding-bottom: 3px; font-size: 15px; font-weight: 500; line-height: 1.95; text-align: right; }
+.proposal-intro h1 { margin-top: 9px; max-width: 780px; font-family: inherit; font-weight: 450; font-size: 35px; letter-spacing: -1.4px; line-height: 1.4; overflow-wrap: anywhere; }
+.proposal-intro-copy { padding-bottom: 3px; font-size: 12px; font-weight: 400; line-height: 1.95; text-align: right; white-space: pre-line; color: var(--prop-muted); }
 .proposal-intro-copy span { font-size: 11px; font-weight: 400; color: var(--prop-muted); }
 .proposal-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .46fr); gap: 42px; align-items: start; }
 .proposal-visual { min-width: 0; }
 .proposal-figure { margin: 0; }
-.proposal-image-frame { width: 100%; position: relative; aspect-ratio: 1.45; min-height: 350px; overflow: hidden; background: #e7e4db; }
+.proposal-image-frame { width: 100%; position: relative; aspect-ratio: 1.6; min-height: 350px; overflow: hidden; background: #edece5; }
 .proposal-hero-image { display: block; width: 100%; height: 100%; object-fit: cover; transition: opacity .2s ease; }
-.proposal-hero-image[src^="data:"] { object-fit: contain; background: #e9ecee; }
+.proposal-hero-image[src^="data:"] { object-fit: contain; background: #edece5; }
 .proposal-image-top { position: absolute; inset: 23px 24px auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none; }
 .proposal-image-label { display: inline-block; padding: 8px 11px; color: #363a30; background: rgba(255,255,252,.91); font-size: 9px; font-weight: 600; letter-spacing: 1px; backdrop-filter: blur(12px); }
-.proposal-image-index { color: #fff; font-size: 8px; letter-spacing: 1.8px; text-shadow: 0 1px 7px #0008; }
+.proposal-image-index { color: #7a7f71; font-size: 8px; letter-spacing: 1.8px; }
+.proposal-reference-visible .proposal-image-index { color: #fff; text-shadow: 0 1px 7px #0008; }
 .proposal-3d-btn { position: absolute; bottom: 22px; right: 23px; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 14px; border: 1px solid #fff9; border-radius: 3px; background: rgba(251,251,247,.95); color: #353d2f; box-shadow: 0 2px 10px #00000008; font-size: 11px !important; font-weight: 550 !important; backdrop-filter: blur(16px); transition: background .18s; }
 .proposal-3d-btn:hover { background: white; }
 .proposal-3d-btn svg { width: 18px; height: 18px; }
@@ -78,6 +81,9 @@ body.customer #t2Select, body.customer #viewTabs .tgroup { display: none !import
 .proposal-option:hover { border-color: #9da48f; background: #f0f0e9; }
 .proposal-option[aria-pressed="true"], .proposal-option.selected, .proposal-option.active { border-color: var(--prop-olive); background: #eff0e8; box-shadow: 0 0 0 .5px var(--prop-olive); }
 .proposal-option-thumb, .proposal-option > img { width: 76px; height: 75px; object-fit: cover; flex: 0 0 76px; border-radius: 2px; }
+.proposal-option-palette { display: flex; width: 62px; height: 61px; flex: 0 0 62px; overflow: hidden; border: 1px solid #0000000c; border-radius: 3px; transform: rotate(-3deg); }
+.proposal-option-palette i { display: block; flex: 1; box-shadow: inset -1px 0 #00000008; }
+.proposal-option-palette i:first-child { flex: 1.6; }
 .proposal-option-copy { display: block; min-width: 0; flex: 1; padding: 2px 0; }
 .proposal-option-name { display: block; font-size: 13px; font-weight: 600; line-height: 1.5; letter-spacing: -.3px; }
 .proposal-option-desc { display: block; font-size: 10px; color: var(--prop-muted); line-height: 1.75; margin-top: 4px; word-break: keep-all; }
@@ -116,6 +122,21 @@ body.customer #t2Select, body.customer #viewTabs .tgroup { display: none !import
 .proposal-changes { margin-top: 9px; font-size: 11px; line-height: 1.9; color: #606855; }
 .proposal-change, .proposal-changes > div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px solid #e9e9e1; }
 .proposal-changes b, .proposal-changes strong { font-weight: 500; color: #3e4835; }
+.proposal-scope { margin-bottom: 30px; padding-top: 28px; border-top: 1px solid var(--prop-line); }
+.proposal-scope-basis { margin-top: 13px; color: var(--prop-muted); font-size: 11px; line-height: 1.8; }
+.proposal-scope-rooms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 36px; margin-top: 15px; }
+.proposal-scope-room { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 0; padding: 14px 0; border-bottom: 1px solid var(--prop-line); }
+.proposal-scope-room > span { min-width: 0; }
+.proposal-scope-room strong { display: block; font-size: 12px; font-weight: 550; overflow-wrap: anywhere; }
+.proposal-scope-room small { display: block; margin-top: 4px; font-size: 10px; line-height: 1.7; color: var(--prop-muted); }
+.proposal-scope-room b { font-size: 13px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.proposal-scope-room.is-selected strong::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 7px; vertical-align: middle; background: var(--prop-olive); }
+.proposal-estimate-summary { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 24px 40px; margin: 24px 0 0; }
+.proposal-estimate-summary > div { display: flex; align-items: baseline; gap: 15px; }
+.proposal-estimate-summary dt { font-size: 10px; color: var(--prop-muted); }
+.proposal-estimate-summary dd { margin: 0; font-size: 14px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.proposal-estimate-summary > div:last-child dd { font-size: 19px; color: var(--prop-olive); }
+.proposal-scope-disclaimer { margin-top: 14px; color: var(--prop-muted); font-size: 10px; line-height: 1.8; text-align: right; }
 .proposal-cost-details { border-top: 1px solid var(--prop-line); border-bottom: 1px solid var(--prop-line); }
 .proposal-cost-details > summary { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 21px 0; cursor: pointer; list-style: none; }
 .proposal-cost-details > summary::-webkit-details-marker { display: none; }
@@ -176,11 +197,11 @@ body.customer #t2Select, body.customer #viewTabs .tgroup { display: none !import
   .proposal-story-title { flex-direction: column; gap: 7px; }
 }
 @media (max-width: 560px) {
-  .proposal-header { height: 67px; gap: 15px; padding: 0 20px; }
+  .proposal-header { height: auto; min-height: 67px; flex-wrap: wrap; gap: 12px; padding: 16px 20px 12px; }
   .proposal-brand { gap: 7px; }
   .proposal-mark { width: 24px; height: 24px; }
   .proposal-brand > span:first-of-type { font-size: 21px; letter-spacing: -1px; }
-  .proposal-header-actions { gap: 13px; }
+  .proposal-header-actions { gap: 12px; width: 100%; justify-content: space-between; }
   .proposal-header-actions .proposal-btn { font-size: 10px; min-height: 44px; padding: 8px 10px; gap: 5px; }
   .proposal-header-actions .proposal-btn-text { padding: 5px 0; gap: 5px; }
   .proposal-header-actions .proposal-btn svg { display: none; }
@@ -195,7 +216,7 @@ body.customer #t2Select, body.customer #viewTabs .tgroup { display: none !import
   .proposal-room-meta { margin-left: auto; font-size: 10px; }
   .proposal-intro { display: block; padding: 17px 0 17px; }
   .proposal-eyebrow { font-size: 8px; letter-spacing: 1.5px; }
-  .proposal-intro h1 { margin-top: 7px; font-size: 31px; letter-spacing: -1.45px; line-height: 1.35; }
+  .proposal-intro h1 { margin-top: 7px; font-size: 28px; letter-spacing: -1.1px; line-height: 1.4; }
   .proposal-intro-copy { margin-top: 8px; padding: 0; max-width: none; text-align: left; font-size: 12px; line-height: 1.6; }
   .proposal-intro-copy br { display: none; }
   .proposal-figure { margin: 0 -20px; }
@@ -238,6 +259,11 @@ body.customer #t2Select, body.customer #viewTabs .tgroup { display: none !import
   .proposal-material { max-width: 85px; }
   .proposal-change-section { padding-top: 1px; }
   .proposal-changes { font-size: 11px; }
+  .proposal-scope-rooms { grid-template-columns: 1fr; }
+  .proposal-scope { padding-top: 24px; }
+  .proposal-estimate-summary { gap: 12px; display: grid; grid-template-columns: 1fr; margin-top: 20px; }
+  .proposal-estimate-summary > div { justify-content: space-between; }
+  .proposal-scope-disclaimer { text-align: left; }
   .proposal-cost-details summary > span:first-child { display: block; }
   .proposal-cost-details summary strong { display: block; margin-top: 6px; font-size: 12px; }
   .proposal-cost-details > summary { padding: 19px 0; }
@@ -254,5 +280,67 @@ body.customer #t2Select, body.customer #viewTabs .tgroup { display: none !import
   #proposalView *, #proposalView *::before, #proposalView *::after { transition: none !important; animation: none !important; }
 }
 @media print {
-  body.proposal-open #proposalView { display: none; }
+  @page { size: A4; margin: 14mm; }
+  body.proposal-open { height: auto !important; overflow: visible !important; background: #fff !important; }
+  body.proposal-open > #proposalView { display: block !important; min-height: 0; background: #fff; color: #222; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  body.proposal-open > #printArea { display: none !important; }
+  #proposalView .proposal-header { height: auto; min-height: 0; padding: 0 0 5mm; border-bottom: 1px solid #ccc; }
+  #proposalView .proposal-header-actions, #proposalView .proposal-room-control,
+  #proposalView .proposal-comparison-heading, #proposalView .proposal-option-intro,
+  #proposalView .proposal-options, #proposalView .proposal-current, #proposalView .proposal-3d-btn,
+  #proposalView .proposal-apply, #proposalView .proposal-status,
+  #proposalView .proposal-details-plus, #proposalView .proposal-footer-note { display: none !important; }
+  #proposalView .proposal-main { width: 100%; margin: 0; }
+  #proposalView .proposal-projectbar { min-height: 0; padding: 4mm 0; }
+  #proposalView .proposal-intro { display: block; padding: 5mm 0; }
+  #proposalView .proposal-intro h1 { font-size: 22px; margin-top: 2mm; letter-spacing: -.6px; }
+  #proposalView .proposal-intro-copy { max-width: none; width: 100%; margin-top: 2mm; text-align: left; font-size: 10px; }
+  #proposalView .proposal-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 6mm; break-inside: avoid; }
+  #proposalView .proposal-config { display: block; border: 0; padding: 0; }
+  #proposalView .proposal-budget { margin: 0; padding: 0; border: 0; }
+  #proposalView .proposal-section-heading h2 { font-size: 12px; }
+  #proposalView .proposal-total-label { margin-top: 5mm; font-size: 9px; }
+  #proposalView .proposal-total { font-size: 25px; letter-spacing: -.8px; }
+  #proposalView .proposal-delta, #proposalView .proposal-room-price { font-size: 9px; }
+  #proposalView .proposal-room-price { margin-top: 3mm; padding-top: 3mm; }
+  #proposalView .proposal-room-price strong { font-size: 11px; }
+  #proposalView .proposal-scope-note { font-size: 8px; margin-top: 3mm; }
+  #proposalView .proposal-figure { margin: 0; }
+  #proposalView .proposal-image-frame { height: 68mm; min-height: 0; aspect-ratio: auto; }
+  #proposalView .proposal-image-top { inset: 3mm 3mm auto; }
+  #proposalView .proposal-image-label { padding: 4px 6px; font-size: 7px; }
+  #proposalView .proposal-image-index { display: none; }
+  #proposalView .proposal-figure figcaption { margin: 2mm 0 0; font-size: 8px; text-align: left; }
+  #proposalView .proposal-image-description { margin-top: 2mm; }
+  #proposalView .proposal-image-description h2 { font-size: 15px; }
+  #proposalView .proposal-image-description p { margin-top: 1mm; font-size: 9px; }
+  #proposalView .proposal-detail-index { display: none; }
+  #proposalView .proposal-story { margin-top: 5mm; padding: 5mm 0; break-inside: avoid; }
+  #proposalView .proposal-story-title { display: flex; flex-direction: row; align-items: baseline; }
+  #proposalView .proposal-story-title h2 { font-size: 14px; }
+  #proposalView .proposal-story-grid { grid-template-columns: 1fr 1fr 1.1fr; gap: 5mm; margin-top: 4mm; }
+  #proposalView .proposal-intention { grid-column: auto; }
+  #proposalView .proposal-intention p, #proposalView .proposal-changes { font-size: 9px; }
+  #proposalView .proposal-materials { gap: 3mm; }
+  #proposalView .proposal-material { max-width: 45px; min-width: 0; }
+  #proposalView .proposal-material strong { font-size: 8px; }
+  #proposalView .proposal-swatch { width: 25px; height: 25px; }
+  #proposalView .proposal-scope { padding-top: 5mm; margin-bottom: 5mm; break-inside: avoid; }
+  #proposalView .proposal-scope-basis { margin-top: 2mm; font-size: 9px; }
+  #proposalView .proposal-scope-rooms { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 6mm; margin-top: 2mm; }
+  #proposalView .proposal-scope-room { padding: 2mm 0; }
+  #proposalView .proposal-scope-room strong, #proposalView .proposal-scope-room b { font-size: 9px; }
+  #proposalView .proposal-scope-room small { font-size: 8px; }
+  #proposalView .proposal-estimate-summary { display: flex; margin-top: 3mm; gap: 5mm; }
+  #proposalView .proposal-estimate-summary dd { font-size: 11px; }
+  #proposalView .proposal-estimate-summary > div:last-child dd { font-size: 13px; }
+  #proposalView .proposal-scope-disclaimer { margin-top: 2mm; font-size: 8px; }
+  #proposalView .proposal-cost-details > summary { padding: 4mm 0; }
+  #proposalView .proposal-cost-details summary strong { font-size: 11px; }
+  #proposalView .proposal-table-wrap { overflow: visible; padding-bottom: 4mm; }
+  #proposalView .proposal-cost-table { font-size: 9px; }
+  #proposalView .proposal-cost-table th, #proposalView .proposal-cost-table td { padding: 2mm; font-size: 9px; }
+  #proposalView .proposal-cost-table tr { break-inside: avoid; }
+  #proposalView .proposal-footer { padding: 4mm 0 0; }
+  #proposalView .proposal-footer p { font-size: 8px; }
 }

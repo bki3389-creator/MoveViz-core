@@ -11,6 +11,10 @@ import { floorCanvas } from './textures.js';
 let renderer, scene, camera, controls, root, raycaster, container;
 let highlight = null;   // { mesh, prevEmissive }
 let hoverMarker = null;
+let sceneGrid, studioGround, studioFill;
+let presentation = false, presentationRoom = null;
+let cutawayDirection = new THREE.Vector3(Infinity, Infinity, Infinity);
+const studioBackground = new THREE.Color(0xedece7);
 
 export function init3D(el) {
   container = el;
@@ -40,14 +44,28 @@ export function init3D(el) {
   window.__psSun = sun;
   sun.position.set(10, 16, 6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.00015;
+  sun.shadow.normalBias = 0.025;
+  sun.shadow.radius = 3;
   sun.shadow.camera.left = -20; sun.shadow.camera.right = 20;
   sun.shadow.camera.top = 20; sun.shadow.camera.bottom = -20;
   scene.add(sun);
 
-  const grid = new THREE.GridHelper(60, 60, 0xc6cdd6, 0xdde2e9);
-  grid.position.y = -0.011;
-  scene.add(grid);
+  sceneGrid = new THREE.GridHelper(60, 60, 0xc6cdd6, 0xdde2e9);
+  sceneGrid.position.y = -0.011;
+  scene.add(sceneGrid);
+  studioGround = new THREE.Mesh(new THREE.PlaneGeometry(300, 300),
+    new THREE.ShadowMaterial({ color: 0x777264, opacity: 0.18 }));
+  studioGround.rotation.x = -Math.PI / 2;
+  studioGround.position.y = -0.055;
+  studioGround.receiveShadow = true;
+  studioGround.visible = false;
+  scene.add(studioGround);
+  studioFill = new THREE.DirectionalLight(0xe7edff, 0.65);
+  studioFill.position.set(-8, 7, -4);
+  studioFill.visible = false;
+  scene.add(studioFill);
 
   root = new THREE.Group();
   scene.add(root);
@@ -75,6 +93,11 @@ function resize() {
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  if (presentation && !walk) {
+    const group = presentationRoom && root?.children.find(g => g.userData.roomId === presentationRoom);
+    if (group) frameObject(group);
+    else if (root) frameObject(root);
+  }
 }
 function animate() {
   requestAnimationFrame(animate);
@@ -98,7 +121,85 @@ function animate() {
   } else {
     controls.update();
   }
+  updatePresentationCutaway();
   renderer.render(scene, camera);
+}
+
+// 작업실의 모형 표현은 저장 데이터와 분리한다. 걷기/실사 렌더는 원래 벽을 사용한다.
+// presentationVisible은 실사 렌더가 clone한 모델에서 원래 가시성을 복원하는 런타임 표식이다.
+function presentationVisibility(object, visible) {
+  if (object.userData.presentationVisible === undefined) object.userData.presentationVisible = object.visible;
+  object.visible = visible;
+}
+function restorePresentationVisibility() {
+  root?.traverse(o => {
+    if (o.userData.presentationVisible !== undefined) {
+      o.visible = o.userData.presentationVisible;
+      delete o.userData.presentationVisible;
+    }
+  });
+}
+function configureSceneLighting() {
+  if (!scene) return;
+  const studio = presentation && !walk;
+  scene.background = studio ? studioBackground : natureEquirect();
+  scene.fog = studio ? null : new THREE.Fog(0xeef1f5, 40, 110);
+  sceneGrid.visible = !studio;
+  studioGround.visible = studio;
+  studioFill.visible = studio;
+  const hemi = window.__psHemi, sun = window.__psSun;
+  if (hemi) {
+    hemi.color.setHex(studio ? 0xfffcf6 : 0xffffff);
+    hemi.groundColor.setHex(studio ? 0xb9afa0 : 0x9aa1a9);
+    hemi.intensity = studio ? (state.lightFX ? 1.05 : 1.55) : (state.lightFX ? 1.35 : 2.4);
+  }
+  if (sun) {
+    sun.color.setHex(studio ? 0xfff0d8 : 0xffffff);
+    sun.intensity = studio ? 2.6 : (state.lightFX ? 1 : 0.65);
+  }
+  renderer.toneMapping = studio || state.lightFX ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+  renderer.toneMappingExposure = studio ? 1.02 : (state.lightFX ? 1.15 : 1);
+}
+function cutawayWallKeys(r, project, direction) {
+  const keys = new Set();
+  for (const wall of wallsOf(r, project)) {
+    if (wall.inner) continue;
+    const mid = (wall.lo + wall.hi) / 2;
+    const inward = wall.dir === 'z'
+      ? (inPoly3(mid, wall.pos + 0.04, r.plan.boundary) ? 1 : -1)
+      : (inPoly3(wall.pos + 0.04, mid, r.plan.boundary) ? 1 : -1);
+    const facing = -(wall.dir === 'z' ? direction.z : direction.x) * inward;
+    if (facing > 0.12) keys.add(wall.key);
+  }
+  return keys;
+}
+function updatePresentationCutaway(force = false) {
+  if (!root || !presentation || walk) return;
+  const direction = camera.position.clone().sub(controls.target).normalize();
+  if (!force && direction.distanceToSquared(cutawayDirection) < 0.0004) return;
+  cutawayDirection.copy(direction);
+  restorePresentationVisibility();
+  for (const group of root.children) {
+    const r = room(group.userData.roomId);
+    if (!r) continue;
+    if (presentationRoom && r.id !== presentationRoom) {
+      presentationVisibility(group, false);
+      continue;
+    }
+    const cutKeys = cutawayWallKeys(r, state.project, direction);
+    group.traverse(o => {
+      const ud = o.userData;
+      if (cutKeys.has(ud.wallKey)) presentationVisibility(o, false);
+      if (ud.kind === 'light' && !state.showCeiling && state.mode !== 'light') presentationVisibility(o, false);
+    });
+  }
+}
+
+export function setScenePresentation(enabled) {
+  presentation = !!enabled;
+  restorePresentationVisibility();
+  configureSceneLighting();
+  updatePresentationCutaway(true);
 }
 
 // ── 워크스루(1인칭) — WASD/화살표 이동, 마우스 시점, Shift 달리기, Esc 종료 ──
@@ -122,7 +223,9 @@ function setCeilVisible(v) {
 
 export function enterWalk(cx, cz) {
   if (walk) return;
+  restorePresentationVisibility();
   walk = { keys: {}, yaw: 0, pitch: 0, last: performance.now() };
+  configureSceneLighting();
   setCeilVisible(true);
   camera.position.set(cx, 1.5, cz);
   camera.fov = 70; camera.updateProjectionMatrix();   // 걷기 화각 — 실내 자연 시야(수직 70°)
@@ -153,6 +256,8 @@ export function exitWalk() {
     camera.position.x - Math.sin(camera.rotation.y) * 2,
     1.2,
     camera.position.z - Math.cos(camera.rotation.y) * 2);
+  configureSceneLighting();
+  updatePresentationCutaway(true);
   emit('walk');
 }
 
@@ -295,6 +400,7 @@ function wallMat(finishId, col, lenM, hM) {
   if (!cv2) return colorMat(col, 0.92);
   const tex = new THREE.CanvasTexture(cv2.canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   tex.repeat.set(Math.max(0.4, lenM / cv2.size), cv2.stretchY ? 1 : Math.max(0.4, hM / cv2.size));
   return new THREE.MeshStandardMaterial({ color: 0xffffff, map: tex, roughness: 0.9 });
@@ -317,17 +423,17 @@ function floorTexture(finishId, baseColor) {
 /// 가구 파트 재질 — 목재 결 텍스처·금속 반사·도기 유광·패브릭 고러프 (FM 색으로 역할 판별)
 let furnWoodCv = null;
 const FM = {
-  wood: 0x9a7b52, woodDark: 0x7a5f3e, fabric: 0x93a7b1, fabricDark: 0x7b8f99,
-  white: 0xf2f2ef, metal: 0xdadee2, dark: 0x3a3f45, glass: 0x9fc4dd, bedding: 0xdfe6e2,
+  wood: 0xb39b78, woodDark: 0x745d43, fabric: 0xd2c8b6, fabricDark: 0xb6aa96,
+  white: 0xf2f2ef, metal: 0xdadee2, dark: 0x3a3f45, glass: 0x9fc4dd, bedding: 0xebe7dc,
 };
 function furnMat(color, rough) {
   if (color === FM.wood || color === FM.woodDark) {
     if (!furnWoodCv) {   // 나뭇결 캔버스 1회 생성
       const c = document.createElement('canvas'); c.width = c.height = 256;
       const g3 = c.getContext('2d');
-      g3.fillStyle = '#9a7b52'; g3.fillRect(0, 0, 256, 256);
+      g3.fillStyle = '#bda280'; g3.fillRect(0, 0, 256, 256);
       for (let i = 0; i < 46; i++) {
-        g3.strokeStyle = `rgba(${70 + (i % 5) * 14},${52 + (i % 5) * 10},${30 + (i % 5) * 7},0.35)`;
+        g3.strokeStyle = `rgba(${92 + (i % 5) * 14},${73 + (i % 5) * 10},${48 + (i % 5) * 7},0.2)`;
         g3.lineWidth = 1 + (i % 3);
         g3.beginPath(); g3.moveTo(0, i * 6 + (i % 7));
         g3.bezierCurveTo(80, i * 6 - 4, 170, i * 6 + 5, 256, i * 6);
@@ -337,8 +443,9 @@ function furnMat(color, rough) {
     }
     const tex = new THREE.CanvasTexture(furnWoodCv);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
     const dark = color === FM.woodDark;
-    return new THREE.MeshStandardMaterial({ color: dark ? 0x8a6a45 : 0xb69771, map: tex, roughness: 0.62 });
+    return new THREE.MeshStandardMaterial({ color: dark ? 0x9b856d : 0xffffff, map: tex, roughness: 0.65 });
   }
   if (color === FM.metal) return new THREE.MeshStandardMaterial({ color, metalness: 0.78, roughness: 0.34 });
   if (color === FM.glass) return new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.45, roughness: 0.1 });
@@ -349,9 +456,28 @@ function furnMat(color, rough) {
   return new THREE.MeshStandardMaterial({ color, roughness: rough });
 }
 
+// 데이터의 OBB 치수는 유지하면서 모서리만 둥글게 표현한다. 외부 가구 에셋을 요구하지 않는다.
+function softenedBox(w, h, d, radius) {
+  const geo = new THREE.BoxGeometry(w, h, d, 4, 4, 4);
+  const pos = geo.attributes.position;
+  const inner = new THREE.Vector3(w / 2 - radius, h / 2 - radius, d / 2 - radius);
+  const point = new THREE.Vector3(), anchor = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    point.fromBufferAttribute(pos, i);
+    anchor.set(THREE.MathUtils.clamp(point.x, -inner.x, inner.x),
+      THREE.MathUtils.clamp(point.y, -inner.y, inner.y), THREE.MathUtils.clamp(point.z, -inner.z, inner.z));
+    point.sub(anchor).normalize().multiplyScalar(radius).add(anchor);
+    pos.setXYZ(i, point.x, point.y, point.z);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
 function fpart(g2, w, h, d, color, x, y, z, rough = 0.85) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), furnMat(color, rough));
+  const upholstered = [FM.fabric, FM.fabricDark, FM.bedding].includes(color);
+  const radius = Math.min(w, h, d) * (upholstered ? 0.3 : 0.13);
+  const m = new THREE.Mesh(softenedBox(w, h, d, radius), furnMat(color, rough));
   m.position.set(x, y, z);
+  m.receiveShadow = true;
   g2.add(m);
   return m;
 }
@@ -359,6 +485,7 @@ function fcyl(g2, r1, h, color, x, y, z, rotZ90 = false) {
   const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r1, h, 18), furnMat(color, 0.7));
   if (rotZ90) m.rotation.x = Math.PI / 2;
   m.position.set(x, y, z);
+  m.receiveShadow = true;
   g2.add(m);
   return m;
 }
@@ -381,14 +508,20 @@ function buildFurniture(cat, w, d) {
       break;
     }
     case 'sofa': case 'couch': {
-      fpart(g2, w, 0.32, d, FM.fabricDark, 0, 0.16, 0);                    // 베이스
-      fpart(g2, w, 0.45, d * 0.28, FM.fabric, 0, 0.52, -d / 2 + d * 0.14); // 등받이
+      legs(0.1, 0.09, 0.026);
+      fpart(g2, w, 0.24, d, FM.fabricDark, 0, 0.22, 0);                    // 베이스
+      fpart(g2, w * 0.98, 0.43, d * 0.24, FM.fabricDark, 0, 0.52, -d / 2 + d * 0.13); // 등받이
       for (const sx of [-1, 1])
         fpart(g2, w * 0.1, 0.5, d, FM.fabricDark, sx * (w / 2 - w * 0.05), 0.28, 0);  // 팔걸이
       const nc = w > 1.7 ? 3 : 2;
-      for (let i = 0; i < nc; i++)
-        fpart(g2, (w * 0.78) / nc - 0.02, 0.1, d * 0.55, FM.fabric,
-              (i - (nc - 1) / 2) * (w * 0.78) / nc, 0.37, d * 0.1, 0.98);  // 방석
+      for (let i = 0; i < nc; i++) {
+        const cx = (i - (nc - 1) / 2) * (w * 0.78) / nc;
+        fpart(g2, (w * 0.78) / nc - 0.015, 0.14, d * 0.68, FM.fabric,
+              cx, 0.39, d * 0.09, 0.98);  // 방석
+        const back = fpart(g2, (w * 0.78) / nc - 0.012, 0.36, d * 0.18, FM.fabric,
+              cx, 0.58, -d * 0.26, 0.98);
+        back.rotation.x = -0.09;
+      }
       break;
     }
     case 'chair': case 'stool': {
@@ -451,7 +584,7 @@ function buildFurniture(cat, w, d) {
     }
     default: {
       const hF = FURN_H[cat] ?? 0.8;
-      const m = fpart(g2, w, hF, d, 0x3f8f8a, 0, hF / 2, 0);
+      const m = fpart(g2, w, hF, d, 0xa8aaa3, 0, hF / 2, 0);
       m.material.transparent = true; m.material.opacity = 0.55;
     }
   }
@@ -463,34 +596,38 @@ const FURN_H = { bed: 0.5, sofa: 0.75, chair: 0.85, table: 0.72, cabinet: 1.2, r
 
 export function rebuild3D() {
   clearHighlight();
+  restorePresentationVisibility();
+  const sharedTextures = new Set(texCache.values());
+  const retiredTextures = new Set();
   for (const c of [...root.children]) {
     c.traverse?.(obj => {
       obj.geometry?.dispose?.();
       const m = obj.material;
-      (Array.isArray(m) ? m : m ? [m] : []).forEach(x => x.dispose?.());
+      (Array.isArray(m) ? m : m ? [m] : []).forEach(x => {
+        if (x.map && !sharedTextures.has(x.map)) retiredTextures.add(x.map);
+        x.dispose?.();
+      });
     });
     root.remove(c);
   }
+  for (const texture of retiredTextures) texture.dispose();
   const P = state.project;
+  if (!P?.rooms.some(r => r.id === presentationRoom)) presentationRoom = null;
+  configureSceneLighting();
   if (!P?.rooms.length) return;
   const offs = layoutOffsets();
-
-  // 모드: 재료 확인(밝고 균일) vs 조명 효과(실광원·톤매핑)
-  // 조명효과 모드도 자연광 유지 — 0.55는 대낮 실내가 밤처럼 보였음("자연광이 안 들어옴")
-  if (window.__psHemi) window.__psHemi.intensity = state.lightFX ? 1.35 : 2.4;
-  if (window.__psSun) window.__psSun.intensity = state.lightFX ? 1.0 : 0.65;
-  renderer.toneMapping = state.lightFX ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
-  renderer.toneMappingExposure = state.lightFX ? 1.15 : 1.0;
 
   let lightCount = 0;
   for (const r of P.rooms) {
     const off = offs[r.id];
     if (!off?.bb) continue;
     const g = new THREE.Group();
+    g.userData.roomId = r.id;
     g.position.set(off.x, 0, off.z);
     root.add(g);
     buildRoom(r, g, () => state.lightFX && lightCount++ < 14);   // 실광원은 '조명 효과' 모드에서만
   }
+  updatePresentationCutaway(true);
 }
 
 function finishColor(id, fallback = 0xcccccc) { return item(id)?.color ?? fallback; }
@@ -570,6 +707,14 @@ function buildRoom(r, g, allowRealLight, project = state.project) {
   floor.receiveShadow = true;
   floor.userData = { roomId: r.id, kind: 'floor' };
   g.add(floor);
+  const slabGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.045, bevelEnabled: false });
+  slabGeo.rotateX(Math.PI / 2);
+  const slab = new THREE.Mesh(slabGeo, colorMat(0xd2cabc, 0.95));
+  slab.position.y = -0.002;
+  slab.castShadow = true;
+  slab.receiveShadow = true;
+  slab.userData = { roomId: r.id, kind: 'floor' };
+  g.add(slab);
 
   // 천장
   const ceilGeo = floorGeo.clone();
@@ -677,7 +822,7 @@ function buildRoom(r, g, allowRealLight, project = state.project) {
       holes.push({ hcx, hcz, y0, y1, len });
     }
     if (!holes.length) {
-      wallMesh = new THREE.Mesh(baseGeo, colorMat(col, 0.92));
+      wallMesh = new THREE.Mesh(baseGeo, wallMat(finish, col, wallLen, H));
     } else {
       let brush = new Brush(baseGeo, wallMat(finish, col, wallLen, H));
       brush.updateMatrixWorld();
@@ -712,7 +857,7 @@ function buildRoom(r, g, allowRealLight, project = state.project) {
       for (const [a2, b2] of spans) {
         const bb2 = new THREE.Mesh(new THREE.BoxGeometry(
           w.dir === 'z' ? (b2 - a2) : wallT + 0.02, 0.08, w.dir === 'z' ? wallT + 0.02 : (b2 - a2)),
-          colorMat(0x6e5a44, 0.85));
+          colorMat(new THREE.Color(col).multiplyScalar(0.86).getHex(), 0.85));
         bb2.position.set(w.dir === 'z' ? (a2 + b2) / 2 : w.pos, 0.04, w.dir === 'z' ? w.pos : (a2 + b2) / 2);
         bb2.userData = { roomId: r.id, kind: 'wall', wallKey: w.key };
         g.add(bb2);
@@ -832,6 +977,7 @@ function buildRoom(r, g, allowRealLight, project = state.project) {
         const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, dy, 6),
           new THREE.MeshBasicMaterial({ color: 0x555555 }));
         cord.position.set(l.x, y - dy / 2, l.z);
+        cord.userData = { roomId: r.id, kind: 'light', lightId: l.id };
         g.add(cord);
       }
       if (allowRealLight()) {
@@ -851,7 +997,11 @@ function pickAt(e) {
   const nd = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
   raycaster.setFromCamera(nd, camera);
-  return raycaster.intersectObjects(root.children, true).filter(h => h.object.visible && h.object.userData?.kind);
+  return raycaster.intersectObjects(root.children, true).filter(h => {
+    if (!h.object.userData?.kind) return false;
+    for (let o = h.object; o && o !== root; o = o.parent) if (!o.visible) return false;
+    return true;
+  });
 }
 
 function onHover(e) {
@@ -1003,16 +1153,28 @@ export function captureProposalRoom(r, project) {
   try {
     buildRoom(r, group, () => false, project);
     // 천장과 앞쪽 외곽벽을 연 모형 뷰. 모든 제안을 동일 시점으로 보여 준다.
-    const cutKeys = new Set(wallsOf(r, project).filter(w => !w.inner &&
-      ((w.dir === 'x' && Math.abs(w.pos - bb.maxX) < .15) ||
-       (w.dir === 'z' && Math.abs(w.pos - bb.maxZ) < .15))).map(w => w.key));
+    const cutKeys = cutawayWallKeys(r, project, new THREE.Vector3(1,1.15,1).normalize());
     group.traverse(o => {
       if (['ceiling','light'].includes(o.userData?.kind) || cutKeys.has(o.userData?.wallKey)) o.visible = false;
     });
     preview.add(group);
-    preview.add(new THREE.HemisphereLight(0xffffff, 0xc4bdb1, 2));
-    const sun = new THREE.DirectionalLight(0xfff6e9, 2.5);
-    sun.position.set(bb.maxX + 4, 9, bb.maxZ - 4); preview.add(sun);
+    preview.add(new THREE.HemisphereLight(0xfffcf6, 0xb9afa0, 1.55));
+    const sun = new THREE.DirectionalLight(0xfff0d8, 2.6);
+    const lightSpan = Math.max(bb.maxX-bb.minX,bb.maxZ-bb.minZ,4);
+    const lightX = (bb.maxX+bb.minX)/2, lightZ = (bb.maxZ+bb.minZ)/2, lightY = ceilH(r.plan)/2;
+    sun.position.set(lightX+lightSpan*.6,lightY+lightSpan*1.4,lightZ-lightSpan*.45);
+    sun.target.position.set(lightX,lightY,lightZ);
+    sun.castShadow = true; sun.shadow.mapSize.set(2048,2048);
+    const shadowSpan = Math.max(bb.maxX-bb.minX,bb.maxZ-bb.minZ)+3;
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -shadowSpan;
+    sun.shadow.camera.right = sun.shadow.camera.top = shadowSpan;
+    sun.shadow.normalBias = .025; sun.shadow.bias = -.00015; sun.shadow.radius = 3;
+    preview.add(sun,sun.target);
+    const fill = new THREE.DirectionalLight(0xe7edff,.65);
+    fill.position.set(bb.minX-4,7,bb.minZ-3); preview.add(fill);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(300,300),new THREE.ShadowMaterial({color:0x777264,opacity:.18}));
+    ground.rotation.x = -Math.PI/2; ground.position.y = -.055; ground.receiveShadow = true;
+    preview.add(ground);
     const w = bb.maxX - bb.minX, d = bb.maxZ - bb.minZ;
     const span = Math.max(w, d, 2), cx = (bb.maxX + bb.minX)/2, cz = (bb.maxZ + bb.minZ)/2;
     const aspect = 1.6;
@@ -1029,7 +1191,7 @@ export function captureProposalRoom(r, project) {
     cam.left=vx-h*aspect/2; cam.right=vx+h*aspect/2; cam.top=vy+h/2; cam.bottom=vy-h/2;
     cam.updateProjectionMatrix();
     renderer.setPixelRatio(1); renderer.setSize(960,600,false);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.02;
     renderer.render(preview,cam);
     return renderer.domElement.toDataURL('image/jpeg',.87);
   } finally {
@@ -1037,7 +1199,8 @@ export function captureProposalRoom(r, project) {
     renderer.toneMapping = tone; renderer.toneMappingExposure = exposure;
     const sharedTextures = new Set(texCache.values());
     const textures = new Set();
-    group.traverse(o => { o.geometry?.dispose?.();
+    preview.traverse(o => { o.geometry?.dispose?.();
+      o.shadow?.map?.dispose?.();
       (Array.isArray(o.material) ? o.material : o.material ? [o.material] : []).forEach(m => {
         if (m.map && !sharedTextures.has(m.map)) textures.add(m.map);
         m.dispose();
@@ -1048,10 +1211,57 @@ export function captureProposalRoom(r, project) {
 }
 
 export function frameAll() {
-  const box = new THREE.Box3().setFromObject(root);
+  if (!root) return;
+  if (walk) exitWalk();
+  presentationRoom = null;
+  restorePresentationVisibility();
+  frameObject(root);
+  updatePresentationCutaway(true);
+}
+
+/** 선택 공간의 실측 범위로 카메라를 맞춘다. 작업실에서는 해당 공간만 펼쳐 보인다. */
+export function frameRoom(roomId) {
+  const group = root?.children.find(g => g.userData.roomId === roomId);
+  if (!group) return false;
+  if (walk) exitWalk();
+  presentationRoom = roomId;
+  restorePresentationVisibility();
+  frameObject(group);
+  updatePresentationCutaway(true);
+  return true;
+}
+
+function frameObject(object) {
+  const box = new THREE.Box3().setFromObject(object);
   if (box.isEmpty()) return;
-  const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
-  const d = Math.max(size.x, size.z) * 1.1 + 4;
-  camera.position.set(c.x + d * 0.55, d * 0.7, c.z + d * 0.8);
-  controls.target.copy(c.setY(1));
+  const c = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  camera.fov = presentation ? 42 : 52;
+  camera.updateProjectionMatrix();
+  const direction = new THREE.Vector3(.95,1.04,1.22).normalize();
+  camera.position.copy(c).add(direction);
+  camera.lookAt(c);
+  const inverse = camera.quaternion.clone().invert();
+  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov)/2), tanH = tanV*camera.aspect;
+  let distance = 1;
+  for (const x of [box.min.x,box.max.x]) for (const y of [box.min.y,box.max.y]) for (const z of [box.min.z,box.max.z]) {
+    const p = new THREE.Vector3(x,y,z).sub(c).applyQuaternion(inverse);
+    distance = Math.max(distance, Math.abs(p.x)*1.14/tanH+p.z, Math.abs(p.y)*1.14/tanV+p.z);
+  }
+  camera.position.copy(c).addScaledVector(direction,distance);
+  controls.target.copy(c);
+  controls.minDistance = Math.min(1.5,distance*.15);
+  controls.maxDistance = Math.max(60,distance*4);
+  controls.update();
+  if (presentation && window.__psSun) {
+    const sun = window.__psSun;
+    const span = Math.max(size.x,size.z,4);
+    sun.position.set(c.x+span*.6,c.y+span*1.4,c.z-span*.45);
+    sun.target.position.copy(c);
+    if (!sun.target.parent) scene.add(sun.target);
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -(span+3);
+    sun.shadow.camera.right = sun.shadow.camera.top = span+3;
+    sun.shadow.camera.updateProjectionMatrix();
+    studioFill.position.set(c.x-span,c.y+span,c.z-span*.5);
+  }
 }

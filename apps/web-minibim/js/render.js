@@ -93,6 +93,11 @@ export async function renderShot(root, camera, canvas, {
   // 렌더 전용 보정: 천장은 무조건 켜고 불투명하게(반투명 천장은 PT에서 빛이 새 우유빛),
   // 조명 픽스처 발광 강화(빛나는 광원으로). clone(true)는 재질 공유 — 수정 전 반드시 clone.
   model.traverse(obj => {
+    // 작업실의 열린 벽·선택 공간 표시는 실사 렌더에 전달하지 않는다.
+    if (obj.userData?.presentationVisible !== undefined) {
+      obj.visible = obj.userData.presentationVisible;
+      delete obj.userData.presentationVisible;
+    }
     if (obj.userData?.isCeil) {
       obj.visible = true;
       if (obj.material?.transparent) {

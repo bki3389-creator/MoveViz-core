@@ -13,6 +13,7 @@ import { initMode, getMode, setMode, openModeOverlay, wireModeOverlay, overlayOp
 import { getBiz, saveBiz } from './biz.js';
 import { makeShareLink, parseShareHash } from './share.js';
 import { initProposal } from './proposal.js';
+import { initStudio } from './studio.js';
 import { snapshotProposalProject } from './proposal-model.js';
 import { exportDXF } from './dxf.js';
 import * as ai from './ai.js';
@@ -53,17 +54,19 @@ on(what => {
 });
 rebuild3D(); frameAll(); emit('init');
 const proposalUI = initProposal({
-  onEdit: tab => { setTab(tab); requestAnimationFrame(() => { frameAll(); render2d(); }); },
+  onEdit: () => studioUI.open(),
   onShare: project => shareProject(project),
 });
+const studioUI = initStudio({ setTab, openProposal: () => proposalUI.open(), notify: toast });
 $('btnProposal').onclick = () => proposalUI.open();
 
 // URL 파라미터 — 스크린샷/딥링크 검증용: ?sample(샘플 자동 로드) &tab=2d|3d &room=이름 &ceil=1
 (async () => {
   const q = new URLSearchParams(location.search);
-  const wantsProposal = q.get('view') === 'proposal' ||
+  const wantsProposal = q.get('view') === 'proposal';
+  const wantsStudio = q.get('view') === 'studio' ||
     (q.get('view') !== 'editor' && !q.has('sample') && !q.has('tab') && !q.has('rendershot'));
-  if (wantsProposal && !MODE_DECIDED) setMode('pro', { persist: false, silent: true });
+  if ((wantsProposal || wantsStudio) && !MODE_DECIDED) setMode('pro', { persist: false, silent: true });
   // 고객 링크(#r=) — 읽기전용 '고객 화면': 내 집 모드 강제 + 편집·저장 봉인 + 자동저장 차단
   const shared = await parseShareHash();
   if (!shared && location.hash.startsWith('#r=')) {
@@ -105,11 +108,12 @@ $('btnProposal').onclick = () => proposalUI.open();
   if (q.has('rendershot')) setTimeout(() => runRenderShot(Number(q.get('rendershot')) || 24, 640, 400), 800);
   if (q.has('sample') || q.get('ceil') === '1') { rebuild3D(); emit('select'); }
   // 온보딩: 프로젝트가 비어 있으면 모드에 맞는 샘플 자동 로드 (첫 방문은 모드 선택 후에)
-  if (!q.has('sample') && !shared && (MODE_DECIDED || wantsProposal)) await loadStarterSample();
+  if (!q.has('sample') && !shared && (MODE_DECIDED || wantsProposal || wantsStudio)) await loadStarterSample();
   wireModeOverlay(m => { setTab(m === 'pro' ? '2d' : '3d'); loadStarterSample(); });
-  if (!MODE_DECIDED && !shared && !wantsProposal) openModeOverlay(false);
+  if (!MODE_DECIDED && !shared && !wantsProposal && !wantsStudio) openModeOverlay(false);
   emit('mode');                                 // 모드별 초기 상태(상세 열림/힌트) 1회 적용
   if (wantsProposal || (shared && q.get('view') !== 'editor')) proposalUI.open();
+  else if (wantsStudio) studioUI.open(q.get('step') || 'space');
 })();
 
 /// 비어 있을 때만 모드 맞춤 샘플 로드 + 온보딩 토스트
@@ -278,6 +282,10 @@ function setTab(t) {
   $('pane3d').style.display = t === '3d' ? '' : 'none';
   $('modeChip').innerHTML = t === '2d' ? '2D 도면 <span>F3=3D</span>' : '3D <span>F2=도면</span>';
   state.activeTab = t;
+  document.body.dataset.studioView = t;
+  $('studioView2d')?.setAttribute('aria-pressed', String(t === '2d'));
+  $('studioView3d')?.setAttribute('aria-pressed', String(t === '3d'));
+  if ($('studioSceneHint')) $('studioSceneHint').textContent = t === '2d' ? '드래그로 배치 조정 · 휠로 확대' : '드래그로 회전 · 두 손가락 또는 휠로 확대';
   if (t === '2d') render2d();
   syncToolbar();
 }
@@ -572,9 +580,13 @@ function renderRooms() {
     const m = metricsOf(r);
     const d = document.createElement('div');
     d.className = 'room-card' + (state.selRoom === r.id ? ' on' : '');
+    d.tabIndex = 0; d.setAttribute('role', 'button');
+    d.setAttribute('aria-pressed', String(state.selRoom === r.id));
+    d.setAttribute('aria-label', `${r.name}, ${m.area.toFixed(1)}제곱미터`);
     d.innerHTML = `<div class="rc-top"><b>${esc(r.name)}</b><span>${m.area.toFixed(1)}㎡ · ${m.pyeong.toFixed(1)}평</span></div>
       <div class="rc-sub">${item(r.floorFinish)?.name ?? ''} · ${item(r.wallFinish)?.name ?? ''} · 조명 ${r.lights.length}</div>`;
     d.onclick = () => { state.selRoom = r.id; state.sel = { kind: 'room', roomId: r.id }; emit('select'); };
+    d.onkeydown = e => { if (e.target === d && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); d.click(); } };
     const del = document.createElement('button');
     del.className = 'rc-del'; del.textContent = '×'; del.title = '방 제거';
     del.onclick = ev => {

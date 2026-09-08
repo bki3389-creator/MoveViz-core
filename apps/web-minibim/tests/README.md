@@ -24,12 +24,12 @@ node apps/web-minibim/tests/test_split.mjs     # 개별
 헤드리스 크롬(`?sample&tab=3d&rendershot=N` + 콘솔 grep)으로 검증한다.
 산출물은 `tests/.out/`(gitignore)에 생성.
 
-공간 제안 검증은 `test_proposal.mjs`가 전체 러너에 포함된다. 별도 브라우저 검증:
+공간 제안·작업실 검증은 `test_proposal.mjs`, `test_studio.mjs`가 전체 러너(13파일)에 포함된다. 별도 브라우저 검증:
 
 ```
 node apps/web-minibim/tests/browser_proposal.mjs
 ```
 
 `serve.py` 서버와 Node 22+, Chrome/Edge가 필요하다. 브라우저 위치는 `CHROME_PATH`로 지정할 수 있다.
-제안 비교·모델 미리보기·적용/Undo/복원·고객 링크·모바일·기존 샘플 경로를 검사하고,
+실측 파일 입력 → 실제 마감 변경 → Undo/복원 → 전후 이미지 직접 드래그 → 단가 변경 → 제안서 → 고객 링크의 금액·재료 일치, 모바일·기존 샘플 경로를 검사하고,
 화면을 `tests/.out/proposal-smoke/`에 저장한다. 기존 11개 도메인 테스트와 달리 자동 배포 환경의 기본 검증에는 아직 연결되어 있지 않다.

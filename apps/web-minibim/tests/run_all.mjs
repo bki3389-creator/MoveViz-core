@@ -7,7 +7,7 @@ const here = fileURLToPath(new URL('./', import.meta.url));
 const SUITE = [
   'test_minibim.mjs', 'test_minibim2.mjs', 'test_ux1.mjs', 'test_ux2.mjs',
   'test_split.mjs', 'test_furncsv.mjs', 'test_audit.mjs', 'test_pro.mjs',
-  'edge.test.mjs', 'audit_dxf_csv.mjs', 'validate_dxf.mjs', 'test_proposal.mjs',
+  'edge.test.mjs', 'audit_dxf_csv.mjs', 'validate_dxf.mjs', 'test_proposal.mjs', 'test_studio.mjs',
 ];
 
 let fail = 0;
