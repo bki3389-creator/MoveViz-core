@@ -1,7 +1,7 @@
 import { state, on, emit, selectedRoom, metricsOf, pushProjectHistory, undo } from './state.js';
 import { getBiz } from './biz.js';
 import { item, KRW, canonId } from './catalog.js';
-import { setScenePresentation, frameRoom, frameAll, captureProposalRoom, exitWalk, isWalking } from './scene3d.js';
+import { setScenePresentation, setWallCutaway, frameRoom, frameAll, captureProposalRoom, exitWalk, isWalking } from './scene3d.js';
 import { studioTemplate, designTemplate, sceneTemplate } from './studio-template.js';
 import { FINISH_GROUPS, changeStudioFinish, applyStudioStyle, buildStudioReview } from './studio-model.js';
 
@@ -168,6 +168,14 @@ export function initStudio({ setTab, openProposal, notify }) {
   $('studioView2d').onclick = () => { closeComparison(); setTab('2d'); };
   $('studioView3d').onclick = () => { closeComparison(); setTab('3d'); focusScene(); };
   $('studioFrame').onclick = focusScene;
+  $('studioWallToggle').onclick = () => {
+    closeComparison();
+    if (isWalking()) exitWalk();
+    const opened = setWallCutaway($('studioWallToggle').getAttribute('aria-pressed') !== 'true');
+    $('studioWallToggle').setAttribute('aria-pressed', String(opened));
+    $('studioWallToggle').textContent = opened ? '벽 전체 보기' : '앞벽 열기';
+    $('studioWallToggle').title = opened ? '열어 둔 벽을 모두 다시 표시합니다.' : '현재 시점의 앞벽만 엽니다. 회전해도 열린 벽은 유지됩니다.';
+  };
   $('studioUndo').onclick = () => { closeComparison(); if (!undo()) notify('되돌릴 변경이 없습니다.'); };
   document.querySelectorAll('[data-studio-style]').forEach(button => { button.onclick = () => {
     if (state.customerView || !selectedRoom()) return;

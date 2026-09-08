@@ -40,6 +40,7 @@ export function sceneTemplate() {
     </div>
     <p id="studioSceneHint">드래그로 회전 · 휠로 확대</p>
     <div class="studio-model-actions">
+      <button id="studioWallToggle" class="studio-button studio-wall-toggle" type="button" aria-pressed="false" title="현재 시점의 앞벽만 엽니다. 회전해도 열린 벽은 유지됩니다.">앞벽 열기</button>
       <button id="studioCompare" class="studio-button studio-model-compare" type="button"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2v16M7 4H3v12h4m6-12h4v12h-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>변경 전후 비교</button>
       <button id="studioUndo" class="studio-button studio-model-undo" type="button" aria-label="마지막 변경 되돌리기" title="마지막 변경 되돌리기"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 7h7a5 5 0 0 1 0 10H9M5 7l4-4M5 7l4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>되돌리기</span></button>
     </div>`;

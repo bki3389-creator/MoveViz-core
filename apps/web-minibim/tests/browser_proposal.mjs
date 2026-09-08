@@ -113,6 +113,31 @@ try {
   await send('Emulation.setTouchEmulationEnabled',{enabled:false});
   await send('Page.navigate',{url:base+'/?mode=pro&view=studio'});
   await until(()=>evaluate("document.body.classList.contains('studio-active') && document.querySelector('#studioFinish-floor')"),'working studio');
+  // Wall visibility is explicit and stable when orbiting, including shared-wall door ownership.
+  await evaluate(`window._state=await import('./js/state.js');window._scene=await import('./js/scene3d.js');window._wallProject=JSON.stringify(_state.state.project);
+    window._wallVisibility=()=>{const result=[];_scene.getSceneRefs().root.traverse(o=>{if(o.userData.kind==='wall'){let visible=true;for(let n=o;n;n=n.parent)visible=visible&&n.visible;result.push([o.uuid,visible]);}});return result;};
+    window._orbit=async(x,y,z)=>{const {camera}=_scene.getSceneRefs();camera.position.set(x,y,z);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));};`);
+  assert.equal(await evaluate("document.querySelector('#studioWallToggle').getAttribute('aria-pressed')"),'false','walls are fully visible by default');
+  const fullWalls=await evaluate('_wallVisibility()');
+  assert.ok(fullWalls.length>0 && fullWalls.every(([,visible])=>visible),'every wall and its door/window details visible by default');
+  for(const direction of [[20,15,20],[-20,15,20],[-20,15,-20],[20,15,-20],[1,35,1]]) {
+    await evaluate(`await _orbit(${direction.join(',')})`);
+    assert.deepEqual(await evaluate('_wallVisibility()'),fullWalls,'rotation must not hide walls');
+  }
+  await evaluate('_scene.frameAll()');
+  await click('studioWallToggle');
+  const openWalls=await evaluate('_wallVisibility()');
+  assert.ok(openWalls.some(([,visible])=>!visible),'explicit front-wall opening works');
+  assert.equal(await evaluate(`(()=>{const p=_state.state.project;let valid=true;_scene.getSceneRefs().root.traverse(o=>{if(o.userData.kind!=='wall'||o.visible)return;const r=p.rooms.find(r=>r.id===o.userData.roomId);const context={...p,rooms:[...p.rooms.filter(other=>other.id!==r.id),r]};const w=_state.wallsOf(r,context).find(w=>w.key===o.userData.wallKey);if(!w?.isExterior||w.shared?.length)valid=false;});return valid;})()`),true,'shared walls and their opening details stay visible');
+  await evaluate('await _orbit(-20,15,-20)');
+  assert.deepEqual(await evaluate('_wallVisibility()'),openWalls,'opened walls stay fixed while orbiting');
+  await shot('studio-walls-open-fixed.png');
+  await click('studioWallToggle');
+  assert.deepEqual(await evaluate('_wallVisibility()'),fullWalls,'close restores every wall and detail');
+  await evaluate('_scene.frameRoom(_state.state.project.rooms[1].id)');
+  assert.deepEqual(await evaluate('_wallVisibility()'),fullWalls,'room focus preserves shared walls owned by adjacent rooms');
+  assert.equal(await evaluate('JSON.stringify(_state.state.project)===_wallProject'),true,'wall visibility controls never change saved model');
+  await evaluate('_scene.frameAll()');
   await shot('studio-space.png');
   await click('studioStartDesign');
   assert.equal(await evaluate('document.body.dataset.studioStep'),'design');

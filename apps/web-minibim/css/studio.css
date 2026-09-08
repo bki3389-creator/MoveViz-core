@@ -83,6 +83,9 @@ body.studio-active {
 .studio-model-actions .studio-button { min-height: 35px; padding: 6px 10px; font-size: 11px; gap: 6px; }
 .studio-model-actions .studio-button:hover { background: #eaf0df; }
 .studio-model-compare { color: #61784b; }
+.studio-wall-toggle { border-right: 1px solid #e1e7d6; border-radius: 3px 0 0 3px; }
+.studio-wall-toggle[aria-pressed="true"] { color: #fff; background: #596a49; }
+.studio-active[data-studio-view="2d"] #studioWallToggle { display: none; }
 .studio-model-undo { border-left: 1px solid #e1e7d6; border-radius: 0 3px 3px 0; color: #96a585; }
 .studio-model-actions .studio-button svg { width: 17px; height: 17px; }
 .studio-active #viewTabs { display: none; padding: 0 24px 13px; background: #efeee7; border: 0; gap: 6px; min-height: 0; flex-shrink: 0; }

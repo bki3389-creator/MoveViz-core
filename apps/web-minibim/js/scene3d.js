@@ -13,7 +13,8 @@ let highlight = null;   // { mesh, prevEmissive }
 let hoverMarker = null;
 let sceneGrid, studioGround, studioFill;
 let presentation = false, presentationRoom = null;
-let cutawayDirection = new THREE.Vector3(Infinity, Infinity, Infinity);
+let wallCutaway = false;
+const cutawayDirection = new THREE.Vector3(1, 1, 1).normalize();
 const studioBackground = new THREE.Color(0xedece7);
 
 export function init3D(el) {
@@ -121,7 +122,6 @@ function animate() {
   } else {
     controls.update();
   }
-  updatePresentationCutaway();
   renderer.render(scene, camera);
 }
 
@@ -160,10 +160,14 @@ function configureSceneLighting() {
   renderer.toneMapping = studio || state.lightFX ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   renderer.toneMappingExposure = studio ? 1.02 : (state.lightFX ? 1.15 : 1);
 }
-function cutawayWallKeys(r, project, direction) {
+function cutawayWallKeys(r, project, direction, exteriorOnly = false) {
   const keys = new Set();
-  for (const wall of wallsOf(r, project)) {
+  // 공유 스팬은 앞순서 방만 계산하므로, 판정 대상 방을 마지막에 놓아 부분 공유도 빠짐없이 확인한다.
+  const context = exteriorOnly ? { ...project, rooms: [...project.rooms.filter(other => other.id !== r.id), r] } : project;
+  for (const wall of wallsOf(r, context)) {
     if (wall.inner) continue;
+    // 전체 현장에서는 방 사이의 벽을 열지 않는다. 본체와 개구부가 다른 방 소유일 수 있다.
+    if (exteriorOnly && (!wall.isExterior || wall.shared?.length)) continue;
     const mid = (wall.lo + wall.hi) / 2;
     const inward = wall.dir === 'z'
       ? (inPoly3(mid, wall.pos + 0.04, r.plan.boundary) ? 1 : -1)
@@ -175,18 +179,12 @@ function cutawayWallKeys(r, project, direction) {
 }
 function updatePresentationCutaway(force = false) {
   if (!root || !presentation || walk) return;
-  const direction = camera.position.clone().sub(controls.target).normalize();
-  if (!force && direction.distanceToSquared(cutawayDirection) < 0.0004) return;
-  cutawayDirection.copy(direction);
   restorePresentationVisibility();
   for (const group of root.children) {
     const r = room(group.userData.roomId);
     if (!r) continue;
-    if (presentationRoom && r.id !== presentationRoom) {
-      presentationVisibility(group, false);
-      continue;
-    }
-    const cutKeys = cutawayWallKeys(r, state.project, direction);
+    // 방 선택은 카메라만 이동한다. 이웃 방을 숨기면 그 방 소유의 공유벽도 사라진다.
+    const cutKeys = wallCutaway ? cutawayWallKeys(r, state.project, cutawayDirection, true) : new Set();
     group.traverse(o => {
       const ud = o.userData;
       if (cutKeys.has(ud.wallKey)) presentationVisibility(o, false);
@@ -200,6 +198,14 @@ export function setScenePresentation(enabled) {
   restorePresentationVisibility();
   configureSceneLighting();
   updatePresentationCutaway(true);
+}
+
+/** 사용자가 요청한 시점의 앞벽만 연다. 회전해도 열린 벽은 바뀌지 않는다. 저장 모델과 무관하다. */
+export function setWallCutaway(enabled) {
+  wallCutaway = !!enabled;
+  if (wallCutaway && camera && controls) cutawayDirection.copy(camera.position).sub(controls.target).normalize();
+  updatePresentationCutaway(true);
+  return wallCutaway;
 }
 
 // ── 워크스루(1인칭) — WASD/화살표 이동, 마우스 시점, Shift 달리기, Esc 종료 ──
@@ -688,7 +694,10 @@ function ringExtrude(outer, inner, depth) {
   return geo;
 }
 
-function buildRoom(r, g, allowRealLight, project = state.project) {
+function buildRoom(r, g, allowRealLight, project = state.project, standalone = false) {
+  // 단독 캡처에서는 옆방을 그리지 않으므로 공유벽과 옆방 소유 개구부도 이 방에 복원한다.
+  const roomWalls = wallsOf(r, project).map(w => standalone
+    ? { ...w, shared: [], openings: w.openings.map(o => ({ ...o, foreign: false })) } : w);
   const plan = r.plan, H = ceilH(plan);
   const bd = plan.boundary || [];
   if (bd.length < 3) return;
@@ -764,7 +773,7 @@ function buildRoom(r, g, allowRealLight, project = state.project) {
       }
     } else {
       // 폴백(사선/초소형 방): 벽별 박스 — 코너는 겹침 허용
-      for (const w of wallsOf(r, project).filter(w2 => !w2.inner)) {
+      for (const w of roomWalls.filter(w2 => !w2.inner)) {
         if (w.len < 0.05) continue;
         const mid = (w.lo + w.hi) / 2;
         const inw = w.dir === 'z'
@@ -781,7 +790,7 @@ function buildRoom(r, g, allowRealLight, project = state.project) {
   }
 
   // 벽 — 세그먼트·개구부 컷 (외벽은 두껍게)
-  for (const w of wallsOf(r, project)) {
+  for (const w of roomWalls) {
     const wallT = w.inner ? 0.1 : (w.isExterior ? 0.18 : 0.12);
     const finish = r.wallOverrides?.[w.key] || r.wallFinish;
     const col = (!r.wallOverrides?.[w.key] ? finishColorOf(r, 'wall') : null) ?? finishColor(finish, 0xdedad2);
@@ -1151,7 +1160,7 @@ export function captureProposalRoom(r, project) {
   const ratio = renderer.getPixelRatio();
   const tone = renderer.toneMapping, exposure = renderer.toneMappingExposure;
   try {
-    buildRoom(r, group, () => false, project);
+    buildRoom(r, group, () => false, project, true);
     // 천장과 앞쪽 외곽벽을 연 모형 뷰. 모든 제안을 동일 시점으로 보여 준다.
     const cutKeys = cutawayWallKeys(r, project, new THREE.Vector3(1,1.15,1).normalize());
     group.traverse(o => {
@@ -1219,7 +1228,7 @@ export function frameAll() {
   updatePresentationCutaway(true);
 }
 
-/** 선택 공간의 실측 범위로 카메라를 맞춘다. 작업실에서는 해당 공간만 펼쳐 보인다. */
+/** 선택 공간의 실측 범위로 카메라를 맞춘다. 인접 방 소유의 공유벽도 계속 표시한다. */
 export function frameRoom(roomId) {
   const group = root?.children.find(g => g.userData.roomId === roomId);
   if (!group) return false;
