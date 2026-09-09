@@ -133,6 +133,18 @@ async function loadStarterSample() {
   } catch {}
 }
 
+/// 링크 → QR 모달 (vendor/qrcode.js — kazuhikoarase, MIT). 무대·대면 전달용.
+function showQR(url) {
+  try {
+    const qr = window.qrcode(0, 'L');
+    qr.addData(url);
+    qr.make();
+    $('qrImg').src = qr.createDataURL(5, 10);
+    $('qrModal').hidden = false;
+  } catch {}   // 링크가 QR 용량을 넘으면 조용히 생략 (클립보드는 이미 복사됨)
+}
+$('qrClose').onclick = () => { $('qrModal').hidden = true; };
+
 let _toastT = null;
 function toast(msg, ms = 3000) {
   const t = $('toast');
@@ -175,7 +187,8 @@ async function shareProject(project) {
     await navigator.clipboard.writeText(link);
     copied = true;
     track('share');   // 플라이휠 지표: 고객 전달
-    toast('고객 링크 복사됨 — 카톡·문자에 붙여넣으세요 (받는 사람은 열기만 하면 됩니다)', 3600);
+    toast('고객 링크 복사됨 — QR을 스캔해도 바로 열립니다', 3600);
+    showQR(link);
   } catch {
     prompt('아래 링크를 복사하세요', link);
   }
@@ -454,6 +467,10 @@ document.addEventListener('keydown', e => {
   }
   if (!$('bizModal').hidden) {   // 사업자 프로필 모달 위 — Esc 닫기, 나머지 전역키 차단(감사 확정)
     if (e.key === 'Escape') { e.preventDefault(); $('bizModal').hidden = true; }
+    return;
+  }
+  if (!$('qrModal').hidden) {
+    if (e.key === 'Escape') { e.preventDefault(); $('qrModal').hidden = true; }
     return;
   }
   if (document.body.classList.contains('customer')

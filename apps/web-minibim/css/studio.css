@@ -454,3 +454,12 @@ body.customer.studio-active #studioDesign select:disabled { opacity: 1; -webkit-
 .studio-ai-buttons .studio-button { flex: 1; }
 .studio-ai-image { width: 100%; border-radius: 12px; display: block; }
 .studio-ai-caption { font-size: 11.5px; color: #7a7466; margin: 0; }
+
+/* 음성 입력 + 금액 카운터 연출 */
+.studio-ai-inputrow { display: flex; gap: 8px; align-items: stretch; }
+.studio-ai-inputrow textarea { flex: 1; }
+.studio-mic { flex: 0 0 48px; font-size: 18px; }
+.studio-mic.rec { animation: mic-pulse 1s ease-in-out infinite; background: #b23b2e; color: #fff; border-color: #b23b2e; }
+@keyframes mic-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(178,59,46,.45); } 50% { box-shadow: 0 0 0 8px rgba(178,59,46,0); } }
+@keyframes money-roll { 0% { color: #2f6b3f; transform: scale(1.05); } 100% { transform: scale(1); } }
+.money-pulse { animation: money-roll .55s ease-out; display: inline-block; }

@@ -341,3 +341,10 @@ body.customer #cv2d { pointer-events: none; }                    /* 2D는 보기
 .est-sum .bench.down b { color: var(--accent2); }
 .est-sum .bench.up b { color: #b8552e; }
 .est-sum .bench small { display: block; color: var(--sub); font-size: 10.5px; margin-top: 2px; }
+
+/* QR 모달 */
+#qrModal { position: fixed; inset: 0; background: rgba(10,14,20,.55); z-index: 70;
+  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+#qrModal[hidden] { display: none; }
+.qr-box { text-align: center; width: min(92vw, 420px); }
+#qrImg { width: 100%; max-width: 340px; image-rendering: pixelated; border-radius: 8px; margin: 6px auto 0; display: block; }

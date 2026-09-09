@@ -54,7 +54,10 @@ export function designTemplate() {
         <div class="studio-room-context"><strong id="studioRoomName">선택한 공간</strong><span id="studioRoomArea"></span></div>
         <div class="studio-section-title"><h2>AI 디자이너에게 말하기</h2><span>실측·견적 그라운딩</span></div>
         <div class="studio-ai">
-          <textarea id="studioAiInput" rows="2" placeholder="예: 호텔처럼 어둡고 고급스럽게, 간접등 위주로"></textarea>
+          <div class="studio-ai-inputrow">
+            <textarea id="studioAiInput" rows="2" placeholder="예: 호텔처럼 어둡고 고급스럽게, 간접등 위주로"></textarea>
+            <button id="studioAiMic" class="studio-button studio-mic" type="button" title="말로 입력 (한국어) — 누르고 말하기">🎤</button>
+          </div>
           <div class="studio-ai-buttons">
             <button id="studioAiImage" class="studio-button studio-button-primary" type="button" title="니즈를 내 방 구도의 실사 이미지로 먼저 확인">🎨 이미지로 보기</button>
             <button id="studioAiGo" class="studio-button studio-button-outline" type="button" title="이미지 없이 바로 마감·조명 제안 받기">바로 제안</button>

@@ -64,6 +64,25 @@ export function initStudio({ setTab, openProposal, notify }) {
     closeComparison(); emit('project');
     $('studioStatus').textContent = '변경 반영됨 · 이 브라우저에 자동 저장';
   }
+  // ── 금액 카운터 — 총액이 '굴러가며' 바뀌는 연출 (render보다 먼저 초기화) ──
+  const _tweens = new Map();
+  function tweenMoney(el, target) {
+    const prev = _tweens.has(el) ? _tweens.get(el) : target;
+    _tweens.set(el, target);
+    if (Math.round(prev) === Math.round(target)) { el.textContent = money(target); return; }
+    const t0 = performance.now(), dur = 550;
+    const stepFn = now => {
+      const k = Math.min(1, (now - t0) / dur);
+      const e2 = 1 - Math.pow(1 - k, 3);
+      el.textContent = money(prev + (target - prev) * e2);
+      if (k < 1 && _tweens.get(el) === target) requestAnimationFrame(stepFn);
+    };
+    requestAnimationFrame(stepFn);
+    el.classList.remove('money-pulse');
+    void el.offsetWidth;
+    el.classList.add('money-pulse');
+  }
+
   function render() {
     const p = state.project, r = selectedRoom();
     const review = buildStudioReview(p, r?.id, getBiz(), state.customerView);
@@ -85,9 +104,9 @@ export function initStudio({ setTab, openProposal, notify }) {
     $('studioSceneTitle').textContent = step === 'design' ? r?.name || '내 공간' : p?.name || '내 공간';
     $('studioSceneMeta').textContent = step === 'design' && r ? `${metricsOf(r).area.toFixed(1)}㎡ · 실측 모델` : `${p?.rooms?.length || 0}개 공간 · ${area.toFixed(1)}㎡`;
     $('studioSceneHint').textContent = state.activeTab === '2d' ? '드래그로 배치 조정 · 휠로 확대' : '드래그로 회전 · 두 손가락 또는 휠로 확대';
-    $('studioTotal').textContent = money(review.current.total);
+    tweenMoney($('studioTotal'), review.current.total);
     $('studioDelta').textContent = `선택 공간 변경 전 대비 ${difference(review.delta)} · 전체 공사비 / VAT 포함`;
-    $('studioCostTotal').textContent = money(review.current.total);
+    tweenMoney($('studioCostTotal'), review.current.total);
     $('studioCostContext').textContent = `${p?.rooms?.length || 0}개 공간 · ${area.toFixed(1)}㎡ · VAT 포함 예상 공사비`;
     const breakdown = $('studioCostBreakdown'); breakdown.replaceChildren();
     for (const room of p?.rooms || []) {
@@ -298,6 +317,33 @@ export function initStudio({ setTab, openProposal, notify }) {
   }
   $('studioAiImage').onclick = () => aiRun('image');
   $('studioAiGo').onclick = () => aiRun('text');
+
+  // ── 음성 입력 (Web Speech API, ko-KR) — 무대에서 '말로 시키는' 장치 ──
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    $('studioAiMic').hidden = true;
+  } else {
+    let rec = null;
+    $('studioAiMic').onclick = () => {
+      if (rec) { rec.stop(); return; }
+      rec = new SR();
+      rec.lang = 'ko-KR';
+      rec.interimResults = true;
+      rec.continuous = false;
+      $('studioAiMic').classList.add('rec');
+      rec.onresult = e => {
+        $('studioAiInput').value = [...e.results].map(x => x[0].transcript).join('');
+      };
+      rec.onerror = () => notify('음성 인식 불가 — 마이크 권한을 확인하세요.');
+      rec.onend = () => {
+        $('studioAiMic').classList.remove('rec');
+        rec = null;
+        if ($('studioAiInput').value.trim()) $('studioAiInput').focus();
+      };
+      rec.start();
+    };
+  }
+
 
   $('studioCompareClose').onclick = closeComparison;
   $('studioCompareRange').oninput = e => $('studioComparison').querySelector('.studio-comparison-images').style.setProperty('--split', e.target.value + '%');

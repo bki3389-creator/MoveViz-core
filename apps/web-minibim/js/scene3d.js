@@ -28,6 +28,20 @@ export function init3D(el) {
 
   scene = new THREE.Scene();
   scene.background = natureEquirect();   // 창밖 = 자연(하늘·수목·잔디)
+  // 환경 반사(IBL) — 재질의 플라스틱 느낌 제거. 초록 캐스트 방지 위해 탈채도,
+  // r160엔 environmentIntensity가 없어 밝기를 캔버스에 굽는다(brightness).
+  {
+    const src = natureEquirect(1024).image;
+    const ec = document.createElement('canvas');
+    ec.width = src.width; ec.height = src.height;
+    const ectx = ec.getContext('2d');
+    ectx.filter = 'saturate(0.45) brightness(0.5)';
+    ectx.drawImage(src, 0, 0);
+    const envTex = new THREE.CanvasTexture(ec);
+    envTex.mapping = THREE.EquirectangularReflectionMapping;
+    envTex.colorSpace = THREE.SRGBColorSpace;
+    scene.environment = envTex;
+  }
   scene.fog = new THREE.Fog(0xeef1f5, 40, 110);
 
   camera = new THREE.PerspectiveCamera(52, 1, 0.05, 300);
@@ -231,6 +245,7 @@ export function enterWalk(cx, cz) {
   if (walk) return;
   restorePresentationVisibility();
   walk = { keys: {}, yaw: 0, pitch: 0, last: performance.now() };
+  if (sceneGrid) sceneGrid.visible = false;   // 1인칭 몰입 — 그리드 숨김
   configureSceneLighting();
   setCeilVisible(true);
   camera.position.set(cx, 1.5, cz);
@@ -250,6 +265,7 @@ export function exitWalk() {
   lastWalkPose = currentWalkPose();   // 멈춘 지점 저장 → 렌더샷 시점
   walk = null;
   setCeilVisible(state.showCeiling);
+  if (sceneGrid && !document.body.classList.contains('studio-active')) sceneGrid.visible = true;
   document.removeEventListener('mousemove', onWalkMouse);
   document.removeEventListener('keydown', onWalkKey, true);
   document.removeEventListener('keyup', onWalkKeyUp, true);
@@ -407,7 +423,7 @@ function wallMat(finishId, col, lenM, hM) {
   const tex = new THREE.CanvasTexture(cv2.canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 16;
   tex.repeat.set(Math.max(0.4, lenM / cv2.size), cv2.stretchY ? 1 : Math.max(0.4, hM / cv2.size));
   return new THREE.MeshStandardMaterial({ color: 0xffffff, map: tex, roughness: 0.9 });
 }
@@ -420,7 +436,7 @@ function floorTexture(finishId, baseColor) {
   if (!fc) { texCache.set(fk, null); return null; }
   const tex = new THREE.CanvasTexture(fc.canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = 4;
+  tex.anisotropy = 16;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.repeat.set(1 / fc.size, 1 / fc.size);
   texCache.set(fk, tex);
