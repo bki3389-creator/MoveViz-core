@@ -333,3 +333,11 @@ body.customer #btnArrange, body.customer #galleryTitle { display: none !importan
 body.customer #inspector button { display: none !important; }   /* 삭제·추가·보정 버튼 봉인(마감 골라보기는 유지) */
 body.customer #cv2d { pointer-events: none; }                    /* 2D는 보기 전용 */
 @media print { .rate-my { display: none !important; } }          /* 내부 체크박스가 견적서에 찍히지 않게 */
+
+/* 데이터 플라이휠 표시면 — 기준단가 편차 배지 */
+.est-sum .bench { margin-top: 6px; padding: 7px 10px; border-radius: 9px; font-size: 12px;
+  background: #eef4fa; border: 1px solid #cfe0ef; }
+.est-sum .bench b { font-size: 13px; }
+.est-sum .bench.down b { color: var(--accent2); }
+.est-sum .bench.up b { color: #b8552e; }
+.est-sum .bench small { display: block; color: var(--sub); font-size: 10.5px; margin-top: 2px; }

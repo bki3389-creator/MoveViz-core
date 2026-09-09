@@ -117,6 +117,25 @@ const vatK2 = 1.1;
 A(near(eh.high - eh.low, matB * 0.35 * vatK2, 1), '스윙 폭 = 자재비(이윤 제외)×0.35');
 delete st.state.project.marginPct;
 
+// 11) [플라이휠] 기준단가 편차 — 무조정=0%, 인하 시 음수, 이윤행 무관
+let eb = est.buildEstimate();
+A(Math.abs(eb.benchPct) < 0.01, '무조정 benchPct=0: ' + eb.benchPct);
+st.state.project.rates = { wl_silk: { m: 1250, l: 2750 } };
+eb = est.buildEstimate();
+A(eb.benchPct < -0.1, '단가 인하 시 음수: ' + eb.benchPct);
+st.state.project.marginPct = 10;
+A(Math.abs(est.buildEstimate().benchPct - eb.benchPct) < 1e-9, '이윤행이 benchPct에 무영향');
+delete st.state.project.marginPct;
+st.state.project.rates = {};
+
+// 12) [플라이휠] 지표 스텁 — 누적·요약 라인
+const met = await import(pathToFileURL(base + 'js/metrics.js'));
+met.track('scan_load'); met.track('ai_suggest', 3); met.track('share');
+const mm = met.getMetrics();
+A(mm.scan_load === 1 && mm.ai_suggest === 3 && mm.share === 1, '지표 누적: ' + JSON.stringify(mm));
+A(met.metricsLine().includes('실측 로드 1회') && met.metricsLine().includes('AI 제안 3건'), '지표 요약 라인');
+localStorage.removeItem('planshot_metrics');
+
 // 뒷정리 — 다른 테스트에 전역 오염 방지
 localStorage.removeItem('planshot_biz');
 biz._resetBizCache();

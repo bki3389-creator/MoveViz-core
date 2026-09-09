@@ -4,6 +4,8 @@ import { item, KRW, canonId } from './catalog.js';
 import { setScenePresentation, setWallCutaway, frameRoom, frameAll, captureProposalRoom, exitWalk, isWalking } from './scene3d.js';
 import { studioTemplate, designTemplate, sceneTemplate } from './studio-template.js';
 import { FINISH_GROUPS, changeStudioFinish, applyStudioStyle, buildStudioReview } from './studio-model.js';
+import { track } from './metrics.js';
+import * as aiMod from './ai.js';
 
 const $ = id => document.getElementById(id);
 const money = value => KRW(Math.round(value)) + '원';
@@ -193,6 +195,64 @@ export function initStudio({ setTab, openProposal, notify }) {
       $('studioCompareClose').focus();
     } catch { notify('비교 이미지를 만들지 못했습니다. 3D 화면을 연 뒤 다시 시도하세요.'); }
   };
+  // ── AI 디자이너 → 스튜디오: 한 문장 → 마감·조명 제안 → 실측 모델·견적 동시 반영 ──
+  let aiBusy = false;
+  $('studioAiGo').onclick = async () => {
+    if (state.customerView) return notify('고객 열람용 화면에서는 제안만 볼 수 있습니다.');
+    const r = selectedRoom(), t = $('studioAiInput').value.trim();
+    if (!r) return notify('공간을 먼저 선택하세요.');
+    if (!t || aiBusy) return;
+    aiBusy = true;
+    const btn = $('studioAiGo');
+    btn.disabled = true; btn.textContent = 'AI 제안 생성 중…';
+    const out = $('studioAiResult');
+    out.hidden = false;
+    out.textContent = '실측 치수·물량·카탈로그 단가를 기반으로 제안을 만드는 중…';
+    try {
+      let img = null;
+      try { img = aiMod.captureViewpoint(); } catch {}
+      const { text, changes } = await aiMod.askDesigner(`(대상 공간: ${r.name}) ${t}`, img);
+      track('ai_suggest', changes.length || 1);
+      out.replaceChildren();
+      const p2 = document.createElement('p');
+      p2.textContent = text || '(제안 텍스트 없음)';
+      out.append(p2);
+      if (changes.length) {
+        const list = document.createElement('div');
+        list.className = 'studio-ai-changes';
+        for (const ch of changes) {
+          const li = document.createElement('div');
+          li.textContent = '· ' + aiMod.describeChange(ch);
+          list.append(li);
+        }
+        out.append(list);
+        const applyBtn = document.createElement('button');
+        applyBtn.className = 'studio-button studio-button-primary';
+        applyBtn.type = 'button';
+        applyBtn.textContent = `제안 ${changes.length}건 모두 적용`;
+        applyBtn.onclick = () => {
+          pushProjectHistory();   // 배치 1회 undo
+          let n = 0;
+          for (const ch of changes) if (aiMod.applyChange(ch)) n++;
+          track('ai_apply', n);
+          applyBtn.textContent = `✓ ${n}건 적용됨 — 모델·견적에 반영`;
+          applyBtn.disabled = true;
+          $('studioStatus').textContent = 'AI 제안 반영됨 · 되돌리기로 취소 가능';
+        };
+        out.append(applyBtn);
+      } else {
+        const none = document.createElement('p');
+        none.textContent = '적용 가능한 변경 제안이 없습니다 — 원하는 분위기를 다르게 말해보세요.';
+        out.append(none);
+      }
+    } catch (err) {
+      out.textContent = '⚠ ' + (err?.message || err);
+    }
+    aiBusy = false;
+    btn.disabled = false;
+    btn.textContent = '제안받기';
+  };
+
   $('studioCompareClose').onclick = closeComparison;
   $('studioCompareRange').oninput = e => $('studioComparison').querySelector('.studio-comparison-images').style.setProperty('--split', e.target.value + '%');
   const comparisonImages = $('studioComparison').querySelector('.studio-comparison-images');

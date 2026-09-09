@@ -52,6 +52,12 @@ export function designTemplate() {
       <div class="studio-design-content">
         <div class="studio-panel-heading"><span class="studio-overline">MATERIAL &amp; MOOD</span><h1 id="studioDesignHeading">공간의 분위기</h1><p>마감을 바꾸면 공간과 비용이 함께 바뀝니다.</p></div>
         <div class="studio-room-context"><strong id="studioRoomName">선택한 공간</strong><span id="studioRoomArea"></span></div>
+        <div class="studio-section-title"><h2>AI 디자이너에게 말하기</h2><span>실측·견적 그라운딩</span></div>
+        <div class="studio-ai">
+          <textarea id="studioAiInput" rows="2" placeholder="예: 따뜻한 우드톤 미니멀로, 간접등 위주로 바꿔줘"></textarea>
+          <button id="studioAiGo" class="studio-button studio-button-primary" type="button">제안받기</button>
+          <div id="studioAiResult" aria-live="polite" hidden></div>
+        </div>
         <div class="studio-section-title"><h2>마감 조합으로 시작</h2><span>선택한 방에 적용</span></div>
         <div class="studio-style-options" role="group" aria-label="마감 조합 선택">
           <button class="studio-style studio-style-warm" type="button" data-studio-style="warm" aria-pressed="false"><span class="studio-style-palette" aria-hidden="true"><i></i><i></i><i></i></span><span class="studio-style-title">따뜻한 우드</span><span class="studio-style-caption">강마루 · 실크벽지</span><span class="studio-style-check">${check}</span></button>

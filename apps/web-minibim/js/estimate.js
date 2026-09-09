@@ -120,7 +120,17 @@ export function buildEstimate(P = state.project, { biz = getBiz(), customerView 
     else if (String(x.id).startsWith('w_furnout')) demoKg += x.qty * 1000;
   }
   const demoTons = Math.round(demoKg / 100) / 10;
-  return { rows, sub, subM, subL, vat, total: sub + vat, laborDays, demoTons };
+  // 기준 단가 대비 편차 — 표준 단가표(카탈로그) 총액 대비 유효 견적(제경비 제외).
+  // 시세 데이터 축적의 표시면: 지금은 표준 단가표가 기준, 축적되면 지역 실단가 분포로 대체.
+  let benchBase = 0, benchEff = 0;
+  for (const x of rows) {
+    if (x.id === 'biz_margin') continue;
+    const it = item(x.id); if (!it) continue;
+    benchBase += x.qty * ((it.mat ?? 0) + (it.lab ?? 0));
+    benchEff += x.amount;
+  }
+  const benchPct = benchBase > 0 ? (benchEff - benchBase) / benchBase * 100 : 0;
+  return { rows, sub, subM, subL, vat, total: sub + vat, laborDays, demoTons, benchPct };
 }
 
 // ── 발주 수량 — 물량 × (1+로스) ÷ 포장 단위, 올림 ─────────────
@@ -207,7 +217,12 @@ export function renderEstimateHome(elSummary) {
 }
 
 export function renderEstimate(elSummary, elTable) {
-  const { rows, sub, subM, subL, vat, total, laborDays, demoTons } = buildEstimate();
+  const { rows, sub, subM, subL, vat, total, laborDays, demoTons, benchPct } = buildEstimate();
+  const benchBadge = rows.length
+    ? `<div class="bench ${benchPct > 0.05 ? 'up' : benchPct < -0.05 ? 'down' : ''}">기준 단가 대비
+        <b>${benchPct >= 0 ? '+' : ''}${benchPct.toFixed(1)}%</b>
+        <small>PlanShot 표준 단가표 기준 — 현장이 쌓일수록 지역 실단가 분포로 정밀해집니다</small></div>`
+    : '';
   elSummary.innerHTML = `
     <div class="est-sum">
       <div><span>재료비</span><b>${KRW(Math.round(subM))}원</b></div>
@@ -215,6 +230,7 @@ export function renderEstimate(elSummary, elTable) {
       <div><span>소계</span><b>${KRW(Math.round(sub))}원</b></div>
       <div><span>부가세 ${state.project?.vatPct ?? 10}%</span><b>${KRW(Math.round(vat))}원</b></div>
       <div class="tot"><span>총계</span><b>${KRW(Math.round(total))}원</b></div>
+      ${benchBadge}
       <div class="disc">참고 단가(재료/노무 분리) — 표에서 우리 회사 단가로 수정하세요</div>
       ${laborDays?.length ? `<div class="crewdays">노무 품 환산(참고): ${laborDays.map(d =>
         `${d.crew} ${d.days.toFixed(1)}품${d.days < 1 ? '⚠' : ''}`).join(' · ')}

@@ -12,6 +12,7 @@ import { initMode, getMode, setMode, openModeOverlay, wireModeOverlay, overlayOp
          closeModeOverlay, ezApply } from './mode.js';
 import { getBiz, saveBiz } from './biz.js';
 import { makeShareLink, parseShareHash } from './share.js';
+import { track, metricsLine } from './metrics.js';
 import { initProposal } from './proposal.js';
 import { initStudio } from './studio.js';
 import { snapshotProposalProject } from './proposal-model.js';
@@ -150,13 +151,14 @@ $('btnSample').onclick = async () => {
 };
 $('btnOpen').onclick = () => $('fileIn').click();
 $('fileIn').addEventListener('change', async e => {
+  track('scan_load', e.target.files.length || 1);   // 플라이휠 지표: 실측 유입
   for (const f of e.target.files) loadJSONText(await f.text(), f.name);
   frameAll(); e.target.value = '';
 });
 $('btnSave').onclick = () => saveProjectFile(snapshotProposalProject(state.project, getBiz()));
-$('btnCSV').onclick = () => exportCSV();
-$('btnDXF').onclick = () => exportDXF();
-$('btnPrint').onclick = () => window.print();
+$('btnCSV').onclick = () => { track('csv'); exportCSV(); };
+$('btnDXF').onclick = () => { track('dxf'); exportDXF(); };
+$('btnPrint').onclick = () => { track('print'); window.print(); };
 
 // ── 고객 보내기 — 프로젝트를 읽기전용 링크로 (클립보드 + 모바일 공유시트) ──
 $('btnShare').onclick = () => shareProject(state.project);
@@ -172,6 +174,7 @@ async function shareProject(project) {
   try {
     await navigator.clipboard.writeText(link);
     copied = true;
+    track('share');   // 플라이휠 지표: 고객 전달
     toast('고객 링크 복사됨 — 카톡·문자에 붙여넣으세요 (받는 사람은 열기만 하면 됩니다)', 3600);
   } catch {
     prompt('아래 링크를 복사하세요', link);
@@ -187,6 +190,8 @@ const BZ_FIELDS = [['bzName', 'name'], ['bzPhone', 'phone'], ['bzNum', 'biznum']
 let _bzLogo;   // 편집 중 로고 dataURL
 $('btnBiz').onclick = () => {
   const b = getBiz();
+  const bm = $('bizMetrics');
+  if (bm) bm.textContent = metricsLine();   // 플라이휠 지표 — 첫날부터 세고 있다
   for (const [el, k] of BZ_FIELDS) $(el).value = b[k] ?? '';
   _bzLogo = b.logo || '';
   $('bzLogoPrev').src = _bzLogo;
@@ -519,7 +524,7 @@ function aiAdd(role, text, changes) {
       const row2 = document.createElement('div'); row2.className = 'ai-chip';
       const sp = document.createElement('span'); sp.textContent = ai.describeChange(ch);
       const bt = document.createElement('button'); bt.textContent = '적용';
-      bt.onclick = () => { bt.textContent = ai.applyChange(ch) ? '✓' : '불가'; bt.disabled = true; };
+      bt.onclick = () => { const ok = ai.applyChange(ch); if (ok) track('ai_apply'); bt.textContent = ok ? '✓' : '불가'; bt.disabled = true; };
       row2.append(sp, bt); box.appendChild(row2);
     }
     const all = document.createElement('button');
@@ -544,6 +549,7 @@ async function aiGo() {
   try {
     const { text, changes } = await ai.askDesigner(t, aiImg);
     aiImg = null; $('aiShot').hidden = true;
+    track('ai_suggest', changes?.length || 1);
     aiAdd('ai', text || '(응답 없음)', changes);
   } catch (err) {
     aiAdd('ai', '⚠ ' + (err && err.message || err));
