@@ -31,3 +31,11 @@ export const AI_PROXY_URL = 'https://planshot-ai-proxy.<계정>.workers.dev';
 
 동작 우선순위(js/ai.js): localStorage 개인 키가 있으면 api.anthropic.com 직접 호출,
 없고 `AI_PROXY_URL` 이 설정돼 있으면 프록시 경유(키 불필요), 둘 다 없으면 키 설정 안내 오류.
+
+## 이미지 생성 (/v1/images — FLUX Kontext)
+
+니즈 텍스트 + 시점 캡처(구조 유지) → 실사 스타일 이미지. fal.ai 키 필요:
+
+1. https://fal.ai 가입(개인 이메일) → Dashboard → Keys → 키 생성
+2. `npx wrangler secret put FAL_KEY` → 키 붙여넣기
+3. 한도: IP당 하루 15회(KV RL 바인딩 시). 비용 장당 약 $0.04.

@@ -135,6 +135,34 @@ export async function askDesigner(userText, imageDataUrl) {
   return { text: full.replace(/```json[\s\S]*?```/, '').trim(), changes };
 }
 
+// ── 스타일 이미지 생성 (니즈 → 내 방 구도의 실사 이미지, 프록시 필수) ──
+/// 현재 시점 캡처의 구조·구도를 유지한 채 니즈 텍스트대로 변환 (FLUX Kontext 편집)
+export async function generateStyleImage(styleText, imageDataUrl) {
+  if (!AI_PROXY_URL) throw new Error('이미지 생성은 데모 프록시가 필요합니다 — config.js의 AI_PROXY_URL 설정');
+  const prompt = 'Redesign this Korean apartment interior photo-realistically in the requested style. '
+    + 'Keep the exact room geometry, wall positions, windows, doors and camera angle unchanged. '
+    + 'Only change finishes, colors, lighting mood and furniture styling. '
+    + 'Style request: ' + styleText + '. '
+    + 'High-end interior magazine photography, realistic materials, soft natural light.';
+  const res = await fetch(AI_PROXY_URL + '/v1/images', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ prompt, image_data_url: imageDataUrl }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error?.message || `이미지 API ${res.status}`);
+  return `data:${data.content_type};base64,${data.image_b64}`;
+}
+
+/// 생성된 스타일 이미지 → 시공 가능한 카탈로그 변경으로 번역 (기존 대화 계약 재사용)
+export async function translateStyleImage(roomName, styleText, styledImageDataUrl) {
+  return askDesigner(
+    `(대상 공간: ${roomName}) 첨부 이미지는 방금 생성한 '목표 스타일' 이미지다 (니즈: ${styleText}). ` +
+    `이 분위기를 실제 시공으로 재현하기 위한 변경만 제안하라 — 이미지 속 소품·장식은 무시하고, ` +
+    `마감·색상·천장 유형·조명·(필요하면) 가구를 카탈로그 id로 번역할 것.`,
+    styledImageDataUrl);
+}
+
 // ── 제안 적용 ─────────────────────────────────────
 export function describeChange(ch) {
   const nm = id => item(id)?.name || id;

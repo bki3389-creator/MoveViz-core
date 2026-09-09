@@ -19,6 +19,11 @@ const DEFAULT_MODEL = 'claude-opus-5';
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // 2MB
 const DAILY_LIMIT = 30;                 // IP당 하루 허용 횟수 (KV 있을 때만)
 
+// ── 이미지 생성(/v1/images): fal.ai FLUX Kontext — 시점 캡처의 구조를 유지한 채
+//    스타일만 바꾸는 편집 모델. env.FAL_KEY 시크릿 필요. 하루 한도는 텍스트보다 낮게.
+const FAL_UPSTREAM = 'https://fal.run/fal-ai/flux-pro/kontext';
+const IMAGE_DAILY_LIMIT = 15;
+
 // CORS 공통 헤더 — 데모 프록시이므로 모든 오리진 허용 (자격증명 없는 요청이라 '*' 가능)
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -44,6 +49,71 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10).replace(/-/g, '');
 }
 
+// ── IP당 일일 카운터 (KV 있을 때만) — true = 한도 초과 ──
+async function rateLimited(request, env, prefix, limit) {
+  if (!env.RL) return false;
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const key = `${prefix}:${ip}:${todayKey()}`;
+  try {
+    const count = parseInt((await env.RL.get(key)) || '0', 10);
+    if (count >= limit) return true;
+    await env.RL.put(key, String(count + 1), { expirationTtl: 172800 });
+  } catch {}
+  return false;
+}
+
+// ── /v1/images: {prompt, image_data_url} → FLUX Kontext 스타일 편집 → {image_b64, content_type}
+//    결과 이미지는 워커가 직접 받아 base64로 되돌려준다 (fal CDN CORS 이슈 원천 차단).
+async function handleImages(request, env) {
+  if (!env.FAL_KEY) {
+    return errorResponse(500, '프록시에 FAL_KEY 시크릿이 설정되지 않았습니다 (wrangler secret put FAL_KEY) — fal.ai 키 필요');
+  }
+  if (await rateLimited(request, env, 'rlimg', IMAGE_DAILY_LIMIT)) {
+    return errorResponse(429, `오늘의 이미지 생성 한도(${IMAGE_DAILY_LIMIT}회)를 모두 사용했습니다 — 내일 다시 시도해 주세요`);
+  }
+  let raw;
+  try { raw = await request.arrayBuffer(); } catch { return errorResponse(400, '요청 본문을 읽을 수 없습니다'); }
+  if (raw.byteLength > MAX_BODY_BYTES) {
+    return errorResponse(413, '요청이 너무 큽니다 (최대 2MB) — 캡처 이미지 품질을 낮춰 주세요');
+  }
+  let body;
+  try { body = JSON.parse(new TextDecoder().decode(raw)); } catch { return errorResponse(400, '본문이 올바른 JSON이 아닙니다'); }
+  const prompt = String(body.prompt || '').slice(0, 2000);
+  const img = String(body.image_data_url || '');
+  if (!prompt || !img.startsWith('data:image/')) {
+    return errorResponse(400, 'prompt와 image_data_url(데이터 URI)이 필요합니다');
+  }
+  let up;
+  try {
+    up = await fetch(FAL_UPSTREAM, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: 'Key ' + env.FAL_KEY },
+      body: JSON.stringify({ prompt, image_url: img, output_format: 'jpeg', safety_tolerance: '2' }),
+    });
+  } catch (e) {
+    return errorResponse(502, '이미지 업스트림(fal.ai) 호출 실패: ' + (e && e.message ? e.message : e));
+  }
+  if (!up.ok) {
+    const t = await up.text().catch(() => '');
+    return errorResponse(up.status, '이미지 생성 실패: ' + t.slice(0, 300));
+  }
+  let data;
+  try { data = await up.json(); } catch { return errorResponse(502, '이미지 응답 파싱 실패'); }
+  const outUrl = data?.images?.[0]?.url;
+  if (!outUrl) return errorResponse(502, '이미지 응답에 결과가 없습니다: ' + JSON.stringify(data).slice(0, 200));
+  // 결과 다운로드 → base64 반환
+  let imgRes;
+  try { imgRes = await fetch(outUrl); } catch { return errorResponse(502, '결과 이미지 다운로드 실패'); }
+  const buf = new Uint8Array(await imgRes.arrayBuffer());
+  let bin = '';
+  const CH = 0x8000;
+  for (let i = 0; i < buf.length; i += CH) bin += String.fromCharCode.apply(null, buf.subarray(i, i + CH));
+  return new Response(JSON.stringify({
+    image_b64: btoa(bin),
+    content_type: imgRes.headers.get('content-type') || 'image/jpeg',
+  }), { headers: { 'content-type': 'application/json', ...CORS_HEADERS } });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -53,12 +123,16 @@ export default {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    // ── 라우팅: POST /v1/messages 만 허용 ───────────
-    if (url.pathname !== '/v1/messages') {
-      return errorResponse(404, '지원하지 않는 경로입니다 — POST /v1/messages 만 사용할 수 있습니다');
-    }
+    // ── 라우팅 ──────────────────────────────────────
     if (request.method !== 'POST') {
-      return errorResponse(405, 'POST만 허용됩니다');
+      return errorResponse(url.pathname === '/v1/messages' || url.pathname === '/v1/images' ? 405 : 404,
+        'POST /v1/messages 또는 POST /v1/images 만 사용할 수 있습니다');
+    }
+    if (url.pathname === '/v1/images') {
+      return handleImages(request, env);
+    }
+    if (url.pathname !== '/v1/messages') {
+      return errorResponse(404, '지원하지 않는 경로입니다 — POST /v1/messages 또는 POST /v1/images');
     }
 
     // ── 서버측 키 확인 ──────────────────────────────

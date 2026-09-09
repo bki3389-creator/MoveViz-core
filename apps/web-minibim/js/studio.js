@@ -195,63 +195,109 @@ export function initStudio({ setTab, openProposal, notify }) {
       $('studioCompareClose').focus();
     } catch { notify('비교 이미지를 만들지 못했습니다. 3D 화면을 연 뒤 다시 시도하세요.'); }
   };
-  // ── AI 디자이너 → 스튜디오: 한 문장 → 마감·조명 제안 → 실측 모델·견적 동시 반영 ──
+  // ── AI 디자이너 → 스튜디오 ────────────────────────────────
+  // 두 플로우: ① 🎨 이미지로 보기 — 니즈 → 내 방 구도의 실사 이미지 → [공간에 구현] → 번역·견적
+  //           ② 바로 제안 — 이미지 없이 텍스트+시점 캡처로 즉시 제안
   let aiBusy = false;
-  $('studioAiGo').onclick = async () => {
+
+  function renderAiChanges(out, text, changes) {
+    out.replaceChildren();
+    if (text) {
+      const p2 = document.createElement('p');
+      p2.textContent = text;
+      out.append(p2);
+    }
+    if (!changes.length) {
+      const none = document.createElement('p');
+      none.textContent = '적용 가능한 변경 제안이 없습니다 — 원하는 분위기를 다르게 말해보세요.';
+      out.append(none);
+      return;
+    }
+    const list = document.createElement('div');
+    list.className = 'studio-ai-changes';
+    for (const ch of changes) {
+      const li = document.createElement('div');
+      li.textContent = '· ' + aiMod.describeChange(ch);
+      list.append(li);
+    }
+    out.append(list);
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'studio-button studio-button-primary';
+    applyBtn.type = 'button';
+    applyBtn.textContent = `제안 ${changes.length}건 모두 적용`;
+    applyBtn.onclick = () => {
+      pushProjectHistory();   // 배치 1회 undo
+      let n = 0;
+      for (const ch of changes) if (aiMod.applyChange(ch)) n++;
+      track('ai_apply', n);
+      applyBtn.textContent = `✓ ${n}건 적용됨 — 모델·견적에 반영`;
+      applyBtn.disabled = true;
+      $('studioStatus').textContent = 'AI 제안 반영됨 · 되돌리기로 취소 가능';
+    };
+    out.append(applyBtn);
+  }
+
+  async function aiRun(kind) {
     if (state.customerView) return notify('고객 열람용 화면에서는 제안만 볼 수 있습니다.');
     const r = selectedRoom(), t = $('studioAiInput').value.trim();
     if (!r) return notify('공간을 먼저 선택하세요.');
     if (!t || aiBusy) return;
     aiBusy = true;
-    const btn = $('studioAiGo');
-    btn.disabled = true; btn.textContent = 'AI 제안 생성 중…';
+    const btn = kind === 'image' ? $('studioAiImage') : $('studioAiGo');
+    const label = btn.textContent;
+    btn.disabled = true;
     const out = $('studioAiResult');
     out.hidden = false;
-    out.textContent = '실측 치수·물량·카탈로그 단가를 기반으로 제안을 만드는 중…';
     try {
-      let img = null;
-      try { img = aiMod.captureViewpoint(); } catch {}
-      const { text, changes } = await aiMod.askDesigner(`(대상 공간: ${r.name}) ${t}`, img);
-      track('ai_suggest', changes.length || 1);
-      out.replaceChildren();
-      const p2 = document.createElement('p');
-      p2.textContent = text || '(제안 텍스트 없음)';
-      out.append(p2);
-      if (changes.length) {
-        const list = document.createElement('div');
-        list.className = 'studio-ai-changes';
-        for (const ch of changes) {
-          const li = document.createElement('div');
-          li.textContent = '· ' + aiMod.describeChange(ch);
-          list.append(li);
-        }
-        out.append(list);
-        const applyBtn = document.createElement('button');
-        applyBtn.className = 'studio-button studio-button-primary';
-        applyBtn.type = 'button';
-        applyBtn.textContent = `제안 ${changes.length}건 모두 적용`;
-        applyBtn.onclick = () => {
-          pushProjectHistory();   // 배치 1회 undo
-          let n = 0;
-          for (const ch of changes) if (aiMod.applyChange(ch)) n++;
-          track('ai_apply', n);
-          applyBtn.textContent = `✓ ${n}건 적용됨 — 모델·견적에 반영`;
-          applyBtn.disabled = true;
-          $('studioStatus').textContent = 'AI 제안 반영됨 · 되돌리기로 취소 가능';
+      if (kind === 'image') {
+        btn.textContent = '이미지 생성 중… (3~10초)';
+        out.textContent = '내 방 구도를 유지한 채 니즈 이미지를 생성하는 중…';
+        const capture = aiMod.captureViewpoint();
+        const styled = await aiMod.generateStyleImage(t, capture);
+        track('ai_image');
+        out.replaceChildren();
+        const img = document.createElement('img');
+        img.src = styled;
+        img.alt = '생성된 목표 스타일 이미지';
+        img.className = 'studio-ai-image';
+        const cap = document.createElement('p');
+        cap.className = 'studio-ai-caption';
+        cap.textContent = 'AI 스타일 이미지 — 실측 구조 기반. 아래 버튼이 이 분위기를 시공 가능한 사양으로 번역합니다.';
+        const goBtn = document.createElement('button');
+        goBtn.className = 'studio-button studio-button-primary';
+        goBtn.type = 'button';
+        goBtn.textContent = '이 디자인을 공간에 구현 → 견적';
+        goBtn.onclick = async () => {
+          goBtn.disabled = true;
+          goBtn.textContent = '시공 사양으로 번역 중…';
+          try {
+            const { text, changes } = await aiMod.translateStyleImage(r.name, t, styled);
+            track('ai_suggest', changes.length || 1);
+            renderAiChanges(out, text, changes);
+            out.prepend(cap, img);   // 이미지는 위에 유지
+          } catch (err) {
+            goBtn.textContent = '⚠ ' + (err?.message || err);
+          }
         };
-        out.append(applyBtn);
+        out.append(img, cap, goBtn);
       } else {
-        const none = document.createElement('p');
-        none.textContent = '적용 가능한 변경 제안이 없습니다 — 원하는 분위기를 다르게 말해보세요.';
-        out.append(none);
+        btn.textContent = 'AI 제안 생성 중…';
+        out.textContent = '실측 치수·물량·카탈로그 단가를 기반으로 제안을 만드는 중…';
+        let img = null;
+        try { img = aiMod.captureViewpoint(); } catch {}
+        const { text, changes } = await aiMod.askDesigner(`(대상 공간: ${r.name}) ${t}`, img);
+        track('ai_suggest', changes.length || 1);
+        renderAiChanges(out, text, changes);
       }
     } catch (err) {
       out.textContent = '⚠ ' + (err?.message || err);
     }
     aiBusy = false;
     btn.disabled = false;
-    btn.textContent = '제안받기';
-  };
+    btn.textContent = label;
+  }
+  $('studioAiImage').onclick = () => aiRun('image');
+  $('studioAiGo').onclick = () => aiRun('text');
 
   $('studioCompareClose').onclick = closeComparison;
   $('studioCompareRange').oninput = e => $('studioComparison').querySelector('.studio-comparison-images').style.setProperty('--split', e.target.value + '%');
